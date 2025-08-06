@@ -1,0 +1,164 @@
+/* reactions.css */
+
+.article-reactions {
+    margin: 20px 0;
+    padding: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    background-color: #f8f9fa;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.reaction-buttons {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    justify-content: center;
+}
+
+.reaction-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border: 2px solid #ddd;
+    border-radius: 25px;
+    background-color: #fff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 14px;
+    font-weight: 500;
+    min-width: 80px;
+    justify-content: center;
+}
+
+.reaction-btn:hover:not(:disabled) {
+    background-color: #f0f0f0;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.reaction-btn.active.like-btn {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.reaction-btn.active.like-btn:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+}
+
+.reaction-btn.active.dislike-btn {
+    background-color: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
+.reaction-btn.active.dislike-btn:hover {
+    background-color: #c82333;
+    border-color: #c82333;
+}
+
+.reaction-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.reaction-btn i {
+    font-size: 16px;
+}
+
+.like-count,
+.dislike-count {
+    font-weight: bold;
+    min-width: 20px;
+    text-align: center;
+}
+
+.login-message {
+    margin: 10px 0 0 0;
+    font-size: 13px;
+    color: #666;
+    text-align: center;
+    font-style: italic;
+}
+
+.login-message a {
+    color: #007bff;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.login-message a:hover {
+    text-decoration: underline;
+}
+
+
+/* Feedback message styling */
+
+.feedback-message {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 24px;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.feedback-message.success {
+    background-color: #28a745;
+}
+
+.feedback-message.error {
+    background-color: #dc3545;
+}
+
+
+/* Loading state */
+
+.reaction-btn.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.reaction-btn.loading::after {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border: 2px solid currentColor;
+    border-top: 2px solid transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-left: 5px;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+
+/* Responsive design */
+
+@media (max-width: 768px) {
+    .reaction-buttons {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+    .reaction-btn {
+        width: 150px;
+    }
+}
