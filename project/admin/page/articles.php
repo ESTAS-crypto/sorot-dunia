@@ -56,6 +56,7 @@ function getArticleImageURL($article) {
     return null;
 }
 
+// Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'add_article') {
     $title = sanitize_input($_POST['title'] ?? '');
     $content = $_POST['content'] ?? '';
@@ -215,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
     }
 }
 
-// Fetch all articles (updated query tanpa tags)
+// Fetch all articles
 $query = "SELECT a.*, u.username as author_name, c.name as category_name,
           approver.username as approved_by_name, rejecter.username as rejected_by_name
           FROM articles a 
@@ -262,19 +263,29 @@ function truncateText($text, $length = 100) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kelola Artikel - Admin Panel</title>
-    <link rel="icon" href="../project/img/icon.webp" type="image/webp" />
+    <link rel="icon" href="/project/img/icon.webp" type="image/webp" />
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/project/style/artikel.css">
+
+    <!-- Custom CSS - FIXED PATH -->
+    <link rel="stylesheet" href="/project/style/articles.css">
 </head>
 
 <body>
     <div class="container-fluid py-4">
         <div class="row">
             <div class="col-12">
+
+                <!-- Success/Error Messages -->
                 <?php if ($success_message): ?>
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fas fa-check-circle me-2"></i>
                     <?php echo htmlspecialchars($success_message); ?>
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
@@ -282,101 +293,141 @@ function truncateText($text, $length = 100) {
 
                 <?php if ($error_message): ?>
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-circle me-2"></i>
                     <?php echo htmlspecialchars($error_message); ?>
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
                 <?php endif; ?>
 
+                <!-- Main Card -->
                 <div class="card">
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">Kelola Artikel</h5>
+                            <div>
+                                <h5 class="mb-0">
+                                    <i class="fas fa-newspaper me-2"></i>
+                                    Kelola Artikel
+                                </h5>
+                                <small class="text-muted">Manajemen artikel dan konten website</small>
+                            </div>
                             <button type="button" class="btn btn-primary" data-bs-toggle="modal"
                                 data-bs-target="#addArticleModal">
                                 <i class="fas fa-plus me-2"></i>Tambah Artikel
                             </button>
                         </div>
                     </div>
+
                     <div class="card-body">
-                        <!-- Status Filter Tabs -->
-                        <ul class="nav nav-pills mb-3" id="statusFilter">
+                        <!-- Status Filter Pills -->
+                        <ul class="nav nav-pills mb-4" id="statusFilter">
                             <li class="nav-item">
                                 <a class="nav-link active" href="#" data-filter="all">
-                                    Semua
+                                    <i class="fas fa-list me-2"></i>Semua
                                     <span class="badge-count"><?php echo count($all_articles); ?></span>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" href="#" data-filter="pending">
-                                    Pending Review
+                                    <i class="fas fa-clock me-2"></i>Pending Review
                                     <span
                                         class="badge-count"><?php echo count(array_filter($all_articles, fn($a) => $a['article_status'] == 'pending')); ?></span>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" href="#" data-filter="published">
-                                    Published
+                                    <i class="fas fa-check-circle me-2"></i>Published
                                     <span
                                         class="badge-count"><?php echo count(array_filter($all_articles, fn($a) => $a['article_status'] == 'published')); ?></span>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" href="#" data-filter="rejected">
-                                    Rejected
+                                    <i class="fas fa-times-circle me-2"></i>Rejected
                                     <span
                                         class="badge-count"><?php echo count(array_filter($all_articles, fn($a) => $a['article_status'] == 'rejected')); ?></span>
                                 </a>
                             </li>
                         </ul>
 
-                        <!-- Scroll hint for mobile -->
+                        <!-- Table Hint -->
                         <div class="scroll-hint">
-                            <i class="fas fa-arrows-alt-h"></i> Geser ke kiri/kanan untuk melihat seluruh tabel
+                            <i class="fas fa-arrows-alt-h"></i>
+                            Geser ke kiri/kanan untuk melihat seluruh tabel
                         </div>
 
+                        <!-- Articles Table -->
                         <div class="table-responsive">
-                            <table class="table table-striped">
+                            <table class="table table-hover">
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
-                                        <th>Judul</th>
-                                        <th>Penulis</th>
-                                        <th>Kategori</th>
-                                        <th>Status</th>
-                                        <th>Tanggal</th>
-                                        <th class="text-center">Aksi</th>
+                                        <th><i class="fas fa-hashtag me-1"></i>ID</th>
+                                        <th><i class="fas fa-heading me-1"></i>Judul</th>
+                                        <th><i class="fas fa-user me-1"></i>Penulis</th>
+                                        <th><i class="fas fa-folder me-1"></i>Kategori</th>
+                                        <th><i class="fas fa-flag me-1"></i>Status</th>
+                                        <th><i class="fas fa-calendar me-1"></i>Tanggal</th>
+                                        <th class="text-center"><i class="fas fa-cogs me-1"></i>Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody id="articleTableBody">
                                     <?php if (empty($all_articles)): ?>
                                     <tr>
-                                        <td colspan="7" class="text-center text-muted">Belum ada artikel</td>
+                                        <td colspan="7" class="text-center text-muted py-4">
+                                            <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+                                            <h5>Belum Ada Artikel</h5>
+                                            <p>Klik tombol "Tambah Artikel" untuk membuat artikel pertama</p>
+                                        </td>
                                     </tr>
                                     <?php else: ?>
                                     <?php foreach ($all_articles as $article): ?>
                                     <tr data-status="<?php echo $article['article_status']; ?>">
-                                        <td><?php echo htmlspecialchars($article['article_id']); ?></td>
-                                        <td class="text-truncate"><?php echo htmlspecialchars($article['title']); ?>
+                                        <td>
+                                            <span
+                                                class="badge bg-secondary"><?php echo htmlspecialchars($article['article_id']); ?></span>
                                         </td>
-                                        <td><?php echo htmlspecialchars($article['author_name'] ?? 'Unknown'); ?></td>
-                                        <td><?php echo htmlspecialchars($article['category_name'] ?? 'Uncategorized'); ?>
+                                        <td>
+                                            <div class="text-truncate" style="max-width: 200px;"
+                                                title="<?php echo htmlspecialchars($article['title']); ?>">
+                                                <strong><?php echo htmlspecialchars($article['title']); ?></strong>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-user-circle me-2 text-muted"></i>
+                                                <?php echo htmlspecialchars($article['author_name'] ?? 'Unknown'); ?>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">
+                                                <?php echo htmlspecialchars($article['category_name'] ?? 'Uncategorized'); ?>
+                                            </span>
                                         </td>
                                         <td><?php echo getStatusBadge($article['article_status']); ?></td>
-                                        <td><?php echo formatDate($article['publication_date']); ?></td>
+                                        <td>
+                                            <small class="text-muted">
+                                                <i class="fas fa-clock me-1"></i>
+                                                <?php echo formatDate($article['publication_date']); ?>
+                                            </small>
+                                        </td>
                                         <td>
                                             <div class="action-buttons">
+                                                <!-- View Button -->
                                                 <button class="btn-action btn-view" data-bs-toggle="modal"
                                                     data-bs-target="#viewArticleModal"
                                                     onclick="viewArticle(<?php echo htmlspecialchars(json_encode($article)); ?>)"
-                                                    title="Lihat">
+                                                    title="Lihat Detail">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
+
+                                                <!-- Edit Button -->
                                                 <button class="btn-action btn-edit" data-bs-toggle="modal"
                                                     data-bs-target="#editArticleModal"
                                                     onclick="editArticle(<?php echo htmlspecialchars(json_encode($article)); ?>)"
-                                                    title="Edit">
+                                                    title="Edit Artikel">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
+
+                                                <!-- Approval Buttons (only for pending articles) -->
                                                 <?php if ($article['article_status'] == 'pending'): ?>
                                                 <button class="btn-action btn-approve" data-bs-toggle="modal"
                                                     data-bs-target="#approveArticleModal"
@@ -391,6 +442,8 @@ function truncateText($text, $length = 100) {
                                                     <i class="fas fa-times"></i>
                                                 </button>
                                                 <?php endif; ?>
+
+                                                <!-- Delete Button -->
                                                 <button class="btn-action btn-delete"
                                                     onclick="deleteArticle(<?php echo $article['article_id']; ?>, '<?php echo htmlspecialchars($article['title']); ?>')"
                                                     title="Hapus">
@@ -408,301 +461,454 @@ function truncateText($text, $length = 100) {
                 </div>
             </div>
         </div>
-
-        <!-- Modal View Artikel -->
-        <div class="modal fade" id="viewArticleModal" tabindex="-1">
-            <div class="modal-dialog modal-xl">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Review Artikel</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <!-- View Article Modal -->
+    <div class="modal fade" id="viewArticleModal" tabindex="-1" aria-labelledby="viewArticleModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewArticleModalLabel">
+                        <i class="fas fa-eye me-2"></i>Preview Artikel
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="viewArticleContent">
+                        <!-- Content will be loaded dynamically -->
                     </div>
-                    <div class="modal-body">
-                        <div id="viewArticleContent">
-                            <!-- Content will be loaded here -->
-                        </div>
-                        <div class="approval-actions" id="approvalActions" style="display: none;">
-                            <div class="row">
-                                <div class="col-md-6 mb-2">
-                                    <button type="button" class="btn btn-success w-100" onclick="quickApprove()">
-                                        <i class="fas fa-check me-2"></i>Approve & Publish
-                                    </button>
-                                </div>
-                                <div class="col-md-6">
-                                    <button type="button" class="btn btn-danger w-100" onclick="quickReject()">
-                                        <i class="fas fa-times me-2"></i>Reject Article
-                                    </button>
-                                </div>
+                    <div class="approval-actions" id="approvalActions" style="display: none;">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <button type="button" class="btn btn-success w-100" onclick="quickApprove()">
+                                    <i class="fas fa-check me-2"></i>Approve & Publish
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <button type="button" class="btn btn-danger w-100" onclick="quickReject()">
+                                    <i class="fas fa-times me-2"></i>Reject Article
+                                </button>
                             </div>
                         </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-                        <button type="button" class="btn btn-primary" onclick="editFromView()">
-                            <i class="fas fa-edit me-2"></i>Edit Artikel
-                        </button>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Modal Approve Artikel -->
-        <div class="modal fade" id="approveArticleModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <form method="POST" action="">
-                        <input type="hidden" name="action" value="approve_article">
-                        <input type="hidden" name="article_id" id="approve_article_id">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Approve Artikel</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p>Approve artikel <strong id="approve_article_title"></strong> untuk dipublikasikan?</p>
-                            <div class="mb-3">
-                                <label class="form-label">Catatan Admin (Opsional)</label>
-                                <textarea class="form-control" name="admin_notes" rows="3"
-                                    placeholder="Catatan atau komentar untuk penulis..."></textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                            <button type="submit" class="btn btn-success">Approve & Publish</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal Reject Artikel -->
-        <div class="modal fade" id="rejectArticleModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <form method="POST" action="">
-                        <input type="hidden" name="action" value="reject_article">
-                        <input type="hidden" name="article_id" id="reject_article_id">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Reject Artikel</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p>Reject artikel <strong id="reject_article_title"></strong>?</p>
-                            <div class="mb-3">
-                                <label class="form-label">Alasan Penolakan <span class="text-danger">*</span></label>
-                                <textarea class="form-control" name="rejection_reason" rows="4" required
-                                    placeholder="Jelaskan alasan penolakan artikel ini..."></textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                            <button type="submit" class="btn btn-danger">Reject Article</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal Tambah Artikel -->
-        <div class="modal fade" id="addArticleModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Tambah Artikel Baru</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <form method="POST" action="" enctype="multipart/form-data">
-                        <input type="hidden" name="action" value="add_article">
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label">Judul Artikel <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" name="title" required>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label class="form-label">Kategori <span class="text-danger">*</span></label>
-                                    <select class="form-select" name="category_id" required>
-                                        <option value="">Pilih Kategori</option>
-                                        <?php foreach ($categories as $id => $name): ?>
-                                        <option value="<?php echo $id; ?>"><?php echo htmlspecialchars($name); ?>
-                                        </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Status Artikel</label>
-                                    <select class="form-select" name="article_status">
-                                        <option value="pending">Pending Review</option>
-                                        <option value="draft">Draft</option>
-                                        <option value="published">Published</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <!-- Image Upload Section -->
-                            <div class="mb-3">
-                                <label class="form-label">Gambar Artikel</label>
-                                <div class="image-option-tabs">
-                                    <button type="button" class="image-option-tab active"
-                                        onclick="switchImageOption('upload', this)">
-                                        <i class="fas fa-upload me-2"></i>Upload File
-                                    </button>
-                                    <button type="button" class="image-option-tab"
-                                        onclick="switchImageOption('url', this)">
-                                        <i class="fas fa-link me-2"></i>URL Gambar
-                                    </button>
-                                </div>
-
-                                <div id="image-upload-option" class="image-option-content active">
-                                    <div class="image-upload-section"
-                                        onclick="document.getElementById('add_image_file').click()">
-                                        <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
-                                        <p>Klik untuk pilih gambar atau drag & drop</p>
-                                        <small class="text-muted">Format: JPG, PNG, WEBP, GIF | Maksimal: 300KB</small>
-                                        <input type="file" id="add_image_file" name="image_file" class="d-none"
-                                            accept="image/jpeg,image/png,image/webp,image/gif"
-                                            onchange="previewImage(this, 'add_image_preview')">
-                                    </div>
-                                    <img id="add_image_preview" class="image-preview d-none" alt="Preview">
-                                </div>
-
-                                <div id="image-url-option" class="image-option-content">
-                                    <input type="url" class="form-control" name="image_url"
-                                        placeholder="https://example.com/image.jpg">
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Konten Artikel <span class="text-danger">*</span></label>
-                                <textarea class="form-control" name="content" rows="8" required></textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                            <button type="submit" class="btn btn-primary">Simpan</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal Edit Artikel -->
-        <div class="modal fade" id="editArticleModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Edit Artikel</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <form method="POST" action="" enctype="multipart/form-data">
-                        <input type="hidden" name="action" value="edit_article">
-                        <input type="hidden" name="article_id" id="edit_article_id">
-                        <input type="hidden" name="old_image_filename" id="edit_old_image_filename">
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label">Judul Artikel <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" name="title" id="edit_title" required>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label class="form-label">Kategori <span class="text-danger">*</span></label>
-                                    <select class="form-select" name="category_id" id="edit_category_id" required>
-                                        <option value="">Pilih Kategori</option>
-                                        <?php foreach ($categories as $id => $name): ?>
-                                        <option value="<?php echo $id; ?>"><?php echo htmlspecialchars($name); ?>
-                                        </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Status Artikel</label>
-                                    <select class="form-select" name="article_status" id="edit_article_status">
-                                        <option value="pending">Pending Review</option>
-                                        <option value="draft">Draft</option>
-                                        <option value="published">Published</option>
-                                        <option value="rejected">Rejected</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <!-- Image Upload Section for Edit -->
-                            <div class="mb-3">
-                                <label class="form-label">Gambar Artikel</label>
-                                <div class="image-option-tabs">
-                                    <button type="button" class="image-option-tab active"
-                                        onclick="switchImageOptionEdit('upload', this)">
-                                        <i class="fas fa-upload me-2"></i>Upload File
-                                    </button>
-                                    <button type="button" class="image-option-tab"
-                                        onclick="switchImageOptionEdit('url', this)">
-                                        <i class="fas fa-link me-2"></i>URL Gambar
-                                    </button>
-                                </div>
-
-                                <div id="edit-image-upload-option" class="image-option-content active">
-                                    <div class="image-upload-section"
-                                        onclick="document.getElementById('edit_image_file').click()">
-                                        <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
-                                        <p>Klik untuk pilih gambar baru atau drag & drop</p>
-                                        <small class="text-muted">Format: JPG, PNG, WEBP, GIF | Maksimal: 300KB</small>
-                                        <input type="file" id="edit_image_file" name="image_file" class="d-none"
-                                            accept="image/jpeg,image/png,image/webp,image/gif"
-                                            onchange="previewImage(this, 'edit_image_preview')">
-                                    </div>
-                                    <img id="edit_image_preview" class="image-preview d-none" alt="Preview">
-                                    <div id="edit_current_image" class="mt-2"></div>
-                                </div>
-
-                                <div id="edit-image-url-option" class="image-option-content">
-                                    <input type="url" class="form-control" name="image_url" id="edit_image_url"
-                                        placeholder="https://example.com/image.jpg">
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Konten Artikel <span class="text-danger">*</span></label>
-                                <textarea class="form-control" name="content" id="edit_content" rows="8"
-                                    required></textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                            <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal Konfirmasi Hapus -->
-        <div class="modal fade" id="deleteArticleModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <form method="POST" action="">
-                        <input type="hidden" name="action" value="delete_article">
-                        <input type="hidden" name="article_id" id="delete_article_id">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Konfirmasi Hapus</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p>Apakah Anda yakin ingin menghapus artikel <strong id="delete_article_title"></strong>?
-                            </p>
-                            <p class="text-danger">Tindakan ini tidak dapat dibatalkan!</p>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                            <button type="submit" class="btn btn-danger">Hapus</button>
-                        </div>
-                    </form>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Tutup
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="editFromView()">
+                        <i class="fas fa-edit me-2"></i>Edit Artikel
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Approve Article Modal -->
+    <div class="modal fade" id="approveArticleModal" tabindex="-1" aria-labelledby="approveArticleModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="">
+                    <input type="hidden" name="action" value="approve_article">
+                    <input type="hidden" name="article_id" id="approve_article_id">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="approveArticleModalLabel">
+                            <i class="fas fa-check-circle me-2"></i>Approve Artikel
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Konfirmasi Approval</strong>
+                        </div>
+                        <p>Approve artikel <strong id="approve_article_title"></strong> untuk dipublikasikan?</p>
+
+                        <div class="mb-3">
+                            <label for="admin_notes" class="form-label">
+                                <i class="fas fa-sticky-note me-2"></i>Catatan Admin (Opsional)
+                            </label>
+                            <textarea class="form-control" name="admin_notes" id="admin_notes" rows="3"
+                                placeholder="Berikan catatan atau komentar untuk penulis..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-2"></i>Batal
+                        </button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-check me-2"></i>Approve & Publish
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reject Article Modal -->
+    <div class="modal fade" id="rejectArticleModal" tabindex="-1" aria-labelledby="rejectArticleModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="">
+                    <input type="hidden" name="action" value="reject_article">
+                    <input type="hidden" name="article_id" id="reject_article_id">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="rejectArticleModalLabel">
+                            <i class="fas fa-times-circle me-2"></i>Reject Artikel
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Konfirmasi Penolakan</strong>
+                        </div>
+                        <p>Reject artikel <strong id="reject_article_title"></strong>?</p>
+
+                        <div class="mb-3">
+                            <label for="rejection_reason" class="form-label">
+                                <i class="fas fa-comment me-2"></i>Alasan Penolakan <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control" name="rejection_reason" id="rejection_reason" rows="4"
+                                required
+                                placeholder="Jelaskan secara detail alasan penolakan artikel ini..."></textarea>
+                            <div class="form-text">Alasan yang jelas akan membantu penulis untuk memperbaiki artikelnya.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-2"></i>Batal
+                        </button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-ban me-2"></i>Reject Article
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Article Modal -->
+    <div class="modal fade" id="addArticleModal" tabindex="-1" aria-labelledby="addArticleModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addArticleModalLabel">
+                        <i class="fas fa-plus-circle me-2"></i>Tambah Artikel Baru
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <form method="POST" action="" enctype="multipart/form-data">
+                    <input type="hidden" name="action" value="add_article">
+
+                    <div class="modal-body">
+                        <!-- Article Title -->
+                        <div class="mb-3">
+                            <label for="add_title" class="form-label">
+                                <i class="fas fa-heading me-2"></i>Judul Artikel <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" name="title" id="add_title" required
+                                placeholder="Masukkan judul artikel yang menarik...">
+                        </div>
+
+                        <!-- Category and Status -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="add_category_id" class="form-label">
+                                    <i class="fas fa-folder me-2"></i>Kategori <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select" name="category_id" id="add_category_id" required>
+                                    <option value="">Pilih Kategori</option>
+                                    <?php foreach ($categories as $id => $name): ?>
+                                    <option value="<?php echo $id; ?>"><?php echo htmlspecialchars($name); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="add_article_status" class="form-label">
+                                    <i class="fas fa-flag me-2"></i>Status Artikel
+                                </label>
+                                <select class="form-select" name="article_status" id="add_article_status">
+                                    <option value="pending">Pending Review</option>
+                                    <option value="draft">Draft</option>
+                                    <option value="published">Published</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Image Upload Section -->
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-image me-2"></i>Gambar Artikel
+                            </label>
+
+                            <!-- Image Option Tabs -->
+                            <div class="image-option-tabs">
+                                <button type="button" class="image-option-tab active"
+                                    onclick="switchImageOption('upload', this)">
+                                    <i class="fas fa-upload me-2"></i>Upload File
+                                </button>
+                                <button type="button" class="image-option-tab" onclick="switchImageOption('url', this)">
+                                    <i class="fas fa-link me-2"></i>URL Gambar
+                                </button>
+                            </div>
+
+                            <!-- Upload Option -->
+                            <div id="image-upload-option" class="image-option-content active">
+                                <div class="image-upload-section"
+                                    onclick="document.getElementById('add_image_file').click()">
+                                    <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                                    <p><strong>Klik untuk pilih gambar</strong> atau drag & drop</p>
+                                    <small class="text-muted">
+                                        Format: JPG, PNG, WEBP, GIF | Maksimal: 300KB<br>
+                                        Resolusi optimal: 800x600px
+                                    </small>
+                                    <input type="file" id="add_image_file" name="image_file" class="d-none"
+                                        accept="image/jpeg,image/png,image/webp,image/gif"
+                                        onchange="previewImage(this, 'add_image_preview')">
+                                </div>
+                                <img id="add_image_preview" class="image-preview d-none" alt="Preview">
+                            </div>
+
+                            <!-- URL Option -->
+                            <div id="image-url-option" class="image-option-content">
+                                <input type="url" class="form-control" name="image_url" id="add_image_url"
+                                    placeholder="https://example.com/image.jpg">
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Pastikan URL gambar dapat diakses secara publik
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Article Content -->
+                        <div class="mb-3">
+                            <label for="add_content" class="form-label">
+                                <i class="fas fa-align-left me-2"></i>Konten Artikel <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control" name="content" id="add_content" rows="10" required
+                                placeholder="Tulis konten artikel di sini...&#10;&#10;Tips:&#10;- Gunakan paragraf yang jelas&#10;- Berikan informasi yang berguna&#10;- Periksa tata bahasa sebelum submit"></textarea>
+                            <div class="form-text">
+                                <i class="fas fa-lightbulb me-1"></i>
+                                Artikel berkualitas memiliki minimal 300 kata dan informasi yang berguna bagi pembaca.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-2"></i>Batal
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Simpan Artikel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Article Modal -->
+    <div class="modal fade" id="editArticleModal" tabindex="-1" aria-labelledby="editArticleModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editArticleModalLabel">
+                        <i class="fas fa-edit me-2"></i>Edit Artikel
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <form method="POST" action="" enctype="multipart/form-data">
+                    <input type="hidden" name="action" value="edit_article">
+                    <input type="hidden" name="article_id" id="edit_article_id">
+                    <input type="hidden" name="old_image_filename" id="edit_old_image_filename">
+
+                    <div class="modal-body">
+                        <!-- Article Title -->
+                        <div class="mb-3">
+                            <label for="edit_title" class="form-label">
+                                <i class="fas fa-heading me-2"></i>Judul Artikel <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" name="title" id="edit_title" required>
+                        </div>
+
+                        <!-- Category and Status -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="edit_category_id" class="form-label">
+                                    <i class="fas fa-folder me-2"></i>Kategori <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select" name="category_id" id="edit_category_id" required>
+                                    <option value="">Pilih Kategori</option>
+                                    <?php foreach ($categories as $id => $name): ?>
+                                    <option value="<?php echo $id; ?>"><?php echo htmlspecialchars($name); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="edit_article_status" class="form-label">
+                                    <i class="fas fa-flag me-2"></i>Status Artikel
+                                </label>
+                                <select class="form-select" name="article_status" id="edit_article_status">
+                                    <option value="pending">Pending Review</option>
+                                    <option value="draft">Draft</option>
+                                    <option value="published">Published</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Image Upload Section -->
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-image me-2"></i>Gambar Artikel
+                            </label>
+
+                            <!-- Current Image Display -->
+                            <div id="edit_current_image" class="mb-3"></div>
+
+                            <!-- Image Option Tabs -->
+                            <div class="image-option-tabs">
+                                <button type="button" class="image-option-tab active"
+                                    onclick="switchImageOptionEdit('upload', this)">
+                                    <i class="fas fa-upload me-2"></i>Upload File
+                                </button>
+                                <button type="button" class="image-option-tab"
+                                    onclick="switchImageOptionEdit('url', this)">
+                                    <i class="fas fa-link me-2"></i>URL Gambar
+                                </button>
+                            </div>
+
+                            <!-- Upload Option -->
+                            <div id="edit-image-upload-option" class="image-option-content active">
+                                <div class="image-upload-section"
+                                    onclick="document.getElementById('edit_image_file').click()">
+                                    <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                                    <p><strong>Klik untuk pilih gambar baru</strong> atau drag & drop</p>
+                                    <small class="text-muted">Format: JPG, PNG, WEBP, GIF | Maksimal: 300KB</small>
+                                    <input type="file" id="edit_image_file" name="image_file" class="d-none"
+                                        accept="image/jpeg,image/png,image/webp,image/gif"
+                                        onchange="previewImage(this, 'edit_image_preview')">
+                                </div>
+                                <img id="edit_image_preview" class="image-preview d-none" alt="Preview">
+                            </div>
+
+                            <!-- URL Option -->
+                            <div id="edit-image-url-option" class="image-option-content">
+                                <input type="url" class="form-control" name="image_url" id="edit_image_url"
+                                    placeholder="https://example.com/image.jpg">
+                            </div>
+                        </div>
+
+                        <!-- Article Content -->
+                        <div class="mb-3">
+                            <label for="edit_content" class="form-label">
+                                <i class="fas fa-align-left me-2"></i>Konten Artikel <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control" name="content" id="edit_content" rows="10"
+                                required></textarea>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-2"></i>Batal
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Simpan Perubahan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Article Modal -->
+    <div class="modal fade" id="deleteArticleModal" tabindex="-1" aria-labelledby="deleteArticleModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="">
+                    <input type="hidden" name="action" value="delete_article">
+                    <input type="hidden" name="article_id" id="delete_article_id">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="deleteArticleModalLabel">
+                            <i class="fas fa-trash-alt me-2"></i>Konfirmasi Hapus
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Peringatan!</strong> Tindakan ini tidak dapat dibatalkan.
+                        </div>
+
+                        <div class="text-center mb-3">
+                            <i class="fas fa-trash-alt fa-4x text-danger mb-3"></i>
+                            <h6>Apakah Anda yakin ingin menghapus artikel?</h6>
+                        </div>
+
+                        <div class="bg-light p-3 rounded">
+                            <strong class="text-dark" id="delete_article_title"></strong>
+                        </div>
+
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Data artikel, gambar, dan semua informasi terkait akan dihapus permanen dari sistem.
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-2"></i>Batal
+                        </button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash me-2"></i>Ya, Hapus Artikel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
     let currentArticleForView = null;
+
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add drag and drop functionality
+        initializeDragAndDrop();
+
+        // Auto dismiss alerts after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    });
 
     // Image upload functions
     function switchImageOption(option, button) {
@@ -750,9 +956,9 @@ function truncateText($text, $length = 100) {
         const preview = document.getElementById(previewId);
 
         if (file) {
-            // Validate file size
+            // Validate file size (300KB)
             if (file.size > 300 * 1024) {
-                alert('Ukuran file terlalu besar. Maksimal 300KB.');
+                showAlert('danger', 'Ukuran file terlalu besar. Maksimal 300KB.');
                 input.value = '';
                 preview.classList.add('d-none');
                 return;
@@ -761,7 +967,7 @@ function truncateText($text, $length = 100) {
             // Validate file type
             const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
             if (!allowedTypes.includes(file.type)) {
-                alert('Format file tidak didukung. Hanya JPG, PNG, WEBP, dan GIF yang diizinkan.');
+                showAlert('danger', 'Format file tidak didukung. Hanya JPG, PNG, WEBP, dan GIF yang diizinkan.');
                 input.value = '';
                 preview.classList.add('d-none');
                 return;
@@ -804,70 +1010,112 @@ function truncateText($text, $length = 100) {
         currentArticleForView = article;
 
         const statusBadges = {
-            'published': '<span class="badge bg-success">Published</span>',
-            'draft': '<span class="badge bg-warning text-dark">Draft</span>',
-            'pending': '<span class="badge bg-info">Pending Review</span>',
-            'rejected': '<span class="badge bg-danger">Rejected</span>',
-            'archived': '<span class="badge bg-secondary">Archived</span>'
+            'published': '<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Published</span>',
+            'draft': '<span class="badge bg-warning text-dark"><i class="fas fa-edit me-1"></i>Draft</span>',
+            'pending': '<span class="badge bg-info"><i class="fas fa-clock me-1"></i>Pending Review</span>',
+            'rejected': '<span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i>Rejected</span>',
+            'archived': '<span class="badge bg-secondary"><i class="fas fa-archive me-1"></i>Archived</span>'
         };
 
         const statusBadge = statusBadges[article.article_status] ||
             `<span class="badge bg-secondary">${article.article_status}</span>`;
 
-        // Get image URL (either from upload or URL)
+        // Get image HTML
         let imageHtml = '';
         if (article.image_filename) {
-            imageHtml =
-                `<img src="../uploads/articles/${article.image_filename}" class="img-fluid mb-3" style="max-height: 300px; object-fit: cover;">`;
+            imageHtml = `<div class="text-center mb-4">
+                    <img src="../uploads/articles/${article.image_filename}" 
+                         class="img-fluid rounded shadow" 
+                         style="max-height: 400px; object-fit: cover;" 
+                         alt="Article Image">
+                </div>`;
         } else if (article.image_url) {
-            imageHtml =
-                `<img src="${article.image_url}" class="img-fluid mb-3" style="max-height: 300px; object-fit: cover;">`;
+            imageHtml = `<div class="text-center mb-4">
+                    <img src="${article.image_url}" 
+                         class="img-fluid rounded shadow" 
+                         style="max-height: 400px; object-fit: cover;" 
+                         alt="Article Image">
+                </div>`;
         }
 
         let contentHtml = `
-            <div class="article-meta">
-                <div class="row">
-                    <div class="col-md-6">
-                        <strong>ID:</strong> ${article.article_id}<br>
-                        <strong>Penulis:</strong> ${article.author_name || 'Unknown'}<br>
-                        <strong>Kategori:</strong> ${article.category_name || 'Uncategorized'}
-                    </div>
-                    <div class="col-md-6">
-                        <strong>Status:</strong> ${statusBadge}<br>
-                        <strong>Tanggal:</strong> ${formatDate(article.publication_date)}
+                <div class="article-meta">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-hashtag text-muted me-2"></i>
+                                <strong>ID:</strong>
+                                <span class="badge bg-secondary ms-2">${article.article_id}</span>
+                            </div>
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-user text-muted me-2"></i>
+                                <strong>Penulis:</strong>
+                                <span class="ms-2">${article.author_name || 'Unknown'}</span>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-folder text-muted me-2"></i>
+                                <strong>Kategori:</strong>
+                                <span class="badge bg-info ms-2">${article.category_name || 'Uncategorized'}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-flag text-muted me-2"></i>
+                                <strong>Status:</strong>
+                                <span class="ms-2">${statusBadge}</span>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-clock text-muted me-2"></i>
+                                <strong>Tanggal:</strong>
+                                <span class="ms-2">${formatDate(article.publication_date)}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <h2>${article.title}</h2>
-            
-            ${imageHtml}
-            
-            <div class="article-content">
-                ${article.content.replace(/\n/g, '<br>')}
-            </div>
-        `;
+                
+                <div class="article-preview">
+                    <h2 class="article-title mb-4">${article.title}</h2>
+                    ${imageHtml}
+                    <div class="article-content">
+                        ${article.content.replace(/\n/g, '<br>')}
+                    </div>
+                </div>
+            `;
 
         // Add rejection reason if rejected
         if (article.article_status === 'rejected' && article.rejection_reason) {
             contentHtml += `
-                <div class="alert alert-danger mt-3">
-                    <strong>Alasan Penolakan:</strong><br>
-                    ${article.rejection_reason}
-                    <br><small class="text-muted">Ditolak oleh: ${article.rejected_by_name || 'Unknown'}</small>
-                </div>
-            `;
+                    <div class="alert alert-danger mt-4">
+                        <div class="d-flex align-items-start">
+                            <i class="fas fa-exclamation-triangle fa-lg me-3 mt-1"></i>
+                            <div>
+                                <strong>Alasan Penolakan:</strong><br>
+                                ${article.rejection_reason}
+                                <br><small class="text-muted">
+                                    <i class="fas fa-user me-1"></i>Ditolak oleh: ${article.rejected_by_name || 'Unknown'}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
         }
 
         // Add admin notes if approved
         if (article.article_status === 'published' && article.admin_notes) {
             contentHtml += `
-                <div class="alert alert-success mt-3">
-                    <strong>Catatan Admin:</strong><br>
-                    ${article.admin_notes}
-                    <br><small class="text-muted">Diapprove oleh: ${article.approved_by_name || 'Unknown'}</small>
-                </div>
-            `;
+                    <div class="alert alert-success mt-4">
+                        <div class="d-flex align-items-start">
+                            <i class="fas fa-check-circle fa-lg me-3 mt-1"></i>
+                            <div>
+                                <strong>Catatan Admin:</strong><br>
+                                ${article.admin_notes}
+                                <br><small class="text-muted">
+                                    <i class="fas fa-user me-1"></i>Diapprove oleh: ${article.approved_by_name || 'Unknown'}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
         }
 
         document.getElementById('viewArticleContent').innerHTML = contentHtml;
@@ -894,19 +1142,32 @@ function truncateText($text, $length = 100) {
         const currentImageDiv = document.getElementById('edit_current_image');
         if (article.image_filename) {
             currentImageDiv.innerHTML = `
-                <div class="alert alert-info">
-                    <strong>Gambar saat ini:</strong><br>
-                    <img src="../uploads/articles/${article.image_filename}" style="max-height: 100px; object-fit: cover;" class="rounded">
-                    <br><small>Upload file baru untuk mengganti gambar ini</small>
-                </div>
-            `;
+                    <div class="current-image-display">
+                        <div class="d-flex align-items-center">
+                            <img src="../uploads/articles/${article.image_filename}" 
+                                 style="max-height: 80px; object-fit: cover;" 
+                                 class="rounded me-3" alt="Current Image">
+                            <div>
+                                <strong>Gambar saat ini:</strong><br>
+                                <small class="text-muted">Upload file baru untuk mengganti gambar ini</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
         } else if (article.image_url) {
             currentImageDiv.innerHTML = `
-                <div class="alert alert-info">
-                    <strong>Gambar saat ini (URL):</strong><br>
-                    <img src="${article.image_url}" style="max-height: 100px; object-fit: cover;" class="rounded">
-                </div>
-            `;
+                    <div class="current-image-display">
+                        <div class="d-flex align-items-center">
+                            <img src="${article.image_url}" 
+                                 style="max-height: 80px; object-fit: cover;" 
+                                 class="rounded me-3" alt="Current Image">
+                            <div>
+                                <strong>Gambar saat ini (URL):</strong><br>
+                                <small class="text-muted">${article.image_url}</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
         } else {
             currentImageDiv.innerHTML = '';
         }
@@ -986,9 +1247,30 @@ function truncateText($text, $length = 100) {
         return date.toLocaleDateString('id-ID', options);
     }
 
+    function showAlert(type, message) {
+        const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    <i class="fas fa-${type === 'danger' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+
+        const alertContainer = document.querySelector('.container-fluid .row .col-12');
+        alertContainer.insertAdjacentHTML('afterbegin', alertHtml);
+
+        // Auto dismiss after 5 seconds
+        setTimeout(() => {
+            const alert = alertContainer.querySelector('.alert');
+            if (alert) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }
+        }, 5000);
+    }
+
     // Drag and drop functionality
-    document.addEventListener('DOMContentLoaded', function() {
-        // Add drag and drop for upload sections
+    function initializeDragAndDrop() {
         const uploadSections = document.querySelectorAll('.image-upload-section');
 
         uploadSections.forEach(section => {
@@ -1019,16 +1301,18 @@ function truncateText($text, $length = 100) {
                 }
             });
         });
-    });
+    }
 
-    // Auto-refresh page every 5 minutes to show new articles
+    // Auto-refresh functionality (optional)
     setInterval(function() {
         // Only refresh if user is not in a modal
         if (!document.querySelector('.modal.show')) {
-            location.reload();
+            // You can add auto-refresh logic here if needed
+            // location.reload();
         }
     }, 300000); // 5 minutes
     </script>
+
 </body>
 
 </html>

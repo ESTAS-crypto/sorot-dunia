@@ -97,15 +97,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
 
             case 'give_warning':
-                $user_id = sanitize_input($_POST['user_id']);
+                $user_id = (int)$_POST['user_id'];
                 $warning_level = sanitize_input($_POST['warning_level']);
-                $warning_reason = sanitize_input($_POST['warning_reason']);
+                $warning_reason = trim(sanitize_input($_POST['warning_reason']));
                 $duration_value = (int)$_POST['warning_duration_value'];
                 $duration_unit = sanitize_input($_POST['warning_duration_unit']);
                 $admin_id = $_SESSION['user_id'];
                 
+                // Debug info
+                error_log("WARNING DEBUG: user_id=$user_id, level=$warning_level, reason='$warning_reason', duration_value=$duration_value, duration_unit=$duration_unit");
+                
                 if (empty($warning_reason) || $duration_value <= 0 || empty($duration_unit)) {
-                    $error = "Alasan warning, durasi dan satuan waktu harus diisi!";
+                    $error = "Alasan warning, durasi dan satuan waktu harus diisi dengan lengkap!";
+                    error_log("WARNING ERROR: Missing required fields");
                 } else {
                     // Hitung tanggal kedaluwarsa berdasarkan durasi
                     $expires_at = null;
@@ -138,42 +142,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             break;
                         default:
                             $error = "Satuan waktu tidak valid!";
+                            error_log("WARNING ERROR: Invalid duration unit: $duration_unit");
                             break;
                     }
                     
-                    if (!isset($error)) {
+                    if (!isset($error) && $expires_at) {
                         // Insert warning ke database
                         $warning_query = "INSERT INTO user_warnings (user_id, warning_level, reason, given_by, given_at, expires_at, notification_shown) VALUES (?, ?, ?, ?, NOW(), ?, 0)";
                         $stmt = mysqli_prepare($koneksi, $warning_query);
-                        mysqli_stmt_bind_param($stmt, "ississ", $user_id, $warning_level, $warning_reason, $admin_id, $expires_at);
                         
-                        if (mysqli_stmt_execute($stmt)) {
-                            // Update user warning count
-                            $update_query = "UPDATE users SET warning_count = warning_count + 1, last_warning_at = NOW() WHERE id = ?";
-                            $stmt2 = mysqli_prepare($koneksi, $update_query);
-                            mysqli_stmt_bind_param($stmt2, "i", $user_id);
-                            mysqli_stmt_execute($stmt2);
+                        if ($stmt) {
+                            mysqli_stmt_bind_param($stmt, "issis", $user_id, $warning_level, $warning_reason, $admin_id, $expires_at);
                             
-                            $success = "Warning {$warning_level} berhasil diberikan untuk durasi {$duration_text}!";
-                            
-                            // Log admin action
-                            error_log("Admin {$admin_id} gave {$warning_level} warning to user {$user_id} for {$duration_text}: {$warning_reason}");
+                            if (mysqli_stmt_execute($stmt)) {
+                                // Update user warning count
+                                $update_query = "UPDATE users SET warning_count = warning_count + 1, last_warning_at = NOW() WHERE id = ?";
+                                $stmt2 = mysqli_prepare($koneksi, $update_query);
+                                if ($stmt2) {
+                                    mysqli_stmt_bind_param($stmt2, "i", $user_id);
+                                    mysqli_stmt_execute($stmt2);
+                                    mysqli_stmt_close($stmt2);
+                                }
+                                
+                                $success = "Warning {$warning_level} berhasil diberikan untuk durasi {$duration_text}!";
+                                
+                                // Log admin action
+                                error_log("ADMIN ACTION: Admin {$admin_id} gave {$warning_level} warning to user {$user_id} for {$duration_text}: {$warning_reason}");
+                            } else {
+                                $error = "Gagal memberikan warning: " . mysqli_error($koneksi);
+                                error_log("WARNING SQL ERROR: " . mysqli_error($koneksi));
+                            }
+                            mysqli_stmt_close($stmt);
                         } else {
-                            $error = "Gagal memberikan warning: " . mysqli_error($koneksi);
+                            $error = "Gagal mempersiapkan query warning: " . mysqli_error($koneksi);
+                            error_log("WARNING PREPARE ERROR: " . mysqli_error($koneksi));
                         }
                     }
                 }
                 break;
 
             case 'ban_user':
-                $user_id = sanitize_input($_POST['user_id']);
+                $user_id = (int)$_POST['user_id'];
                 $ban_duration_value = (int)$_POST['ban_duration_value'];
                 $ban_duration_unit = sanitize_input($_POST['ban_duration_unit']);
-                $ban_reason = sanitize_input($_POST['ban_reason']);
+                $ban_reason = trim(sanitize_input($_POST['ban_reason']));
                 $admin_id = $_SESSION['user_id'];
                 
-                if (empty($ban_reason) || $ban_duration_value <= 0) {
-                    $error = "Alasan ban dan durasi harus diisi dengan benar!";
+                if (empty($ban_reason) || $ban_duration_value <= 0 || empty($ban_duration_unit)) {
+                    $error = "Alasan ban, durasi dan satuan waktu harus diisi dengan benar!";
                 } else {
                     // Hitung tanggal berakhir ban
                     $ban_until = date('Y-m-d H:i:s', strtotime("+$ban_duration_value $ban_duration_unit"));
@@ -181,76 +197,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Update user dengan status ban
                     $ban_query = "UPDATE users SET is_banned = 1, ban_until = ?, ban_reason = ?, banned_by = ?, banned_at = NOW() WHERE id = ?";
                     $stmt = mysqli_prepare($koneksi, $ban_query);
-                    mysqli_stmt_bind_param($stmt, "ssii", $ban_until, $ban_reason, $admin_id, $user_id);
                     
-                    if (mysqli_stmt_execute($stmt)) {
-                        // Clear all existing warning sessions untuk user yang di-ban
-                        $clear_sessions = "DELETE FROM warning_sessions WHERE user_id = ?";
-                        $stmt_clear = mysqli_prepare($koneksi, $clear_sessions);
-                        mysqli_stmt_bind_param($stmt_clear, "i", $user_id);
-                        mysqli_stmt_execute($stmt_clear);
+                    if ($stmt) {
+                        mysqli_stmt_bind_param($stmt, "ssii", $ban_until, $ban_reason, $admin_id, $user_id);
                         
-                        $success = "User berhasil di-ban sampai " . date('d F Y H:i', strtotime($ban_until)) . "!";
-                        
-                        // Log admin action
-                        error_log("Admin {$admin_id} banned user {$user_id} until {$ban_until}: {$ban_reason}");
+                        if (mysqli_stmt_execute($stmt)) {
+                            // Clear all existing warning sessions untuk user yang di-ban
+                            $clear_sessions = "DELETE FROM warning_sessions WHERE user_id = ?";
+                            $stmt_clear = mysqli_prepare($koneksi, $clear_sessions);
+                            if ($stmt_clear) {
+                                mysqli_stmt_bind_param($stmt_clear, "i", $user_id);
+                                mysqli_stmt_execute($stmt_clear);
+                                mysqli_stmt_close($stmt_clear);
+                            }
+                            
+                            $success = "User berhasil di-ban sampai " . date('d F Y H:i', strtotime($ban_until)) . "!";
+                            
+                            // Log admin action
+                            error_log("ADMIN ACTION: Admin {$admin_id} banned user {$user_id} until {$ban_until}: {$ban_reason}");
+                        } else {
+                            $error = "Gagal ban user: " . mysqli_error($koneksi);
+                        }
+                        mysqli_stmt_close($stmt);
                     } else {
-                        $error = "Gagal ban user: " . mysqli_error($koneksi);
+                        $error = "Gagal mempersiapkan query ban: " . mysqli_error($koneksi);
                     }
                 }
                 break;
 
             case 'unban_user':
-                $user_id = sanitize_input($_POST['user_id']);
+                $user_id = (int)$_POST['user_id'];
                 
                 // Unban user
                 $unban_query = "UPDATE users SET is_banned = 0, ban_until = NULL, ban_reason = NULL, banned_by = NULL, banned_at = NULL WHERE id = ?";
                 $stmt = mysqli_prepare($koneksi, $unban_query);
-                mysqli_stmt_bind_param($stmt, "i", $user_id);
                 
-                if (mysqli_stmt_execute($stmt)) {
-                    // Clear warning sessions when unbanning
-                    $clear_sessions = "DELETE FROM warning_sessions WHERE user_id = ?";
-                    $stmt_clear = mysqli_prepare($koneksi, $clear_sessions);
-                    mysqli_stmt_bind_param($stmt_clear, "i", $user_id);
-                    mysqli_stmt_execute($stmt_clear);
+                if ($stmt) {
+                    mysqli_stmt_bind_param($stmt, "i", $user_id);
                     
-                    $success = "User berhasil di-unban!";
-                    
-                    // Log admin action
-                    error_log("Admin {$_SESSION['user_id']} unbanned user {$user_id}");
+                    if (mysqli_stmt_execute($stmt)) {
+                        // Clear warning sessions when unbanning
+                        $clear_sessions = "DELETE FROM warning_sessions WHERE user_id = ?";
+                        $stmt_clear = mysqli_prepare($koneksi, $clear_sessions);
+                        if ($stmt_clear) {
+                            mysqli_stmt_bind_param($stmt_clear, "i", $user_id);
+                            mysqli_stmt_execute($stmt_clear);
+                            mysqli_stmt_close($stmt_clear);
+                        }
+                        
+                        $success = "User berhasil di-unban!";
+                        
+                        // Log admin action
+                        error_log("ADMIN ACTION: Admin {$_SESSION['user_id']} unbanned user {$user_id}");
+                    } else {
+                        $error = "Gagal unban user: " . mysqli_error($koneksi);
+                    }
+                    mysqli_stmt_close($stmt);
                 } else {
-                    $error = "Gagal unban user: " . mysqli_error($koneksi);
+                    $error = "Gagal mempersiapkan query unban: " . mysqli_error($koneksi);
                 }
                 break;
 
             case 'clear_warnings':
-                $user_id = sanitize_input($_POST['user_id']);
+                $user_id = (int)$_POST['user_id'];
                 
                 // Set all warnings as expired
                 $clear_query = "UPDATE user_warnings SET expires_at = NOW() WHERE user_id = ? AND (expires_at IS NULL OR expires_at > NOW())";
                 $stmt = mysqli_prepare($koneksi, $clear_query);
-                mysqli_stmt_bind_param($stmt, "i", $user_id);
                 
-                if (mysqli_stmt_execute($stmt)) {
-                    // Clear warning sessions
-                    $clear_sessions = "DELETE FROM warning_sessions WHERE user_id = ?";
-                    $stmt_clear = mysqli_prepare($koneksi, $clear_sessions);
-                    mysqli_stmt_bind_param($stmt_clear, "i", $user_id);
-                    mysqli_stmt_execute($stmt_clear);
+                if ($stmt) {
+                    mysqli_stmt_bind_param($stmt, "i", $user_id);
                     
-                    // Reset warning count
-                    $reset_count = "UPDATE users SET warning_count = 0, last_warning_at = NULL WHERE id = ?";
-                    $stmt_reset = mysqli_prepare($koneksi, $reset_count);
-                    mysqli_stmt_bind_param($stmt_reset, "i", $user_id);
-                    mysqli_stmt_execute($stmt_reset);
-                    
-                    $success = "Semua warning user berhasil dihapus!";
-                    
-                    // Log admin action
-                    error_log("Admin {$_SESSION['user_id']} cleared all warnings for user {$user_id}");
+                    if (mysqli_stmt_execute($stmt)) {
+                        // Clear warning sessions
+                        $clear_sessions = "DELETE FROM warning_sessions WHERE user_id = ?";
+                        $stmt_clear = mysqli_prepare($koneksi, $clear_sessions);
+                        if ($stmt_clear) {
+                            mysqli_stmt_bind_param($stmt_clear, "i", $user_id);
+                            mysqli_stmt_execute($stmt_clear);
+                            mysqli_stmt_close($stmt_clear);
+                        }
+                        
+                        // Reset warning count
+                        $reset_count = "UPDATE users SET warning_count = 0, last_warning_at = NULL WHERE id = ?";
+                        $stmt_reset = mysqli_prepare($koneksi, $reset_count);
+                        if ($stmt_reset) {
+                            mysqli_stmt_bind_param($stmt_reset, "i", $user_id);
+                            mysqli_stmt_execute($stmt_reset);
+                            mysqli_stmt_close($stmt_reset);
+                        }
+                        
+                        $success = "Semua warning user berhasil dihapus!";
+                        
+                        // Log admin action
+                        error_log("ADMIN ACTION: Admin {$_SESSION['user_id']} cleared all warnings for user {$user_id}");
+                    } else {
+                        $error = "Gagal menghapus warning: " . mysqli_error($koneksi);
+                    }
+                    mysqli_stmt_close($stmt);
                 } else {
-                    $error = "Gagal menghapus warning: " . mysqli_error($koneksi);
+                    $error = "Gagal mempersiapkan query clear warning: " . mysqli_error($koneksi);
                 }
                 break;
         }
@@ -524,7 +570,7 @@ function getStatusBadge($status, $user = null) {
     <div class="modal fade" id="addUserModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST">
+                <form method="POST" id="addUserForm">
                     <div class="modal-header">
                         <h5 class="modal-title">Tambah User Baru</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -566,7 +612,7 @@ function getStatusBadge($status, $user = null) {
     <div class="modal fade" id="editUserModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST">
+                <form method="POST" id="editUserForm">
                     <div class="modal-header">
                         <h5 class="modal-title">Edit User</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -663,20 +709,24 @@ function getStatusBadge($status, $user = null) {
 
                         <div class="mb-3">
                             <label class="form-label">Durasi Warning</label>
-                            <div class="warning-duration-grid">
-                                <input type="number" class="form-control" name="warning_duration_value"
-                                    id="warning_duration_value" placeholder="Jumlah" min="1" max="999" value="24"
-                                    required>
-                                <select class="form-select" name="warning_duration_unit" id="warning_duration_unit"
-                                    required>
-                                    <option value="">Pilih Satuan</option>
-                                    <option value="minutes">Menit</option>
-                                    <option value="hours" selected>Jam</option>
-                                    <option value="days">Hari</option>
-                                    <option value="weeks">Minggu</option>
-                                    <option value="months">Bulan</option>
-                                    <option value="years">Tahun</option>
-                                </select>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <input type="number" class="form-control" name="warning_duration_value"
+                                        id="warning_duration_value" placeholder="Jumlah" min="1" max="999" value="24"
+                                        required>
+                                </div>
+                                <div class="col-md-6">
+                                    <select class="form-select" name="warning_duration_unit" id="warning_duration_unit"
+                                        required>
+                                        <option value="">Pilih Satuan</option>
+                                        <option value="minutes">Menit</option>
+                                        <option value="hours" selected>Jam</option>
+                                        <option value="days">Hari</option>
+                                        <option value="weeks">Minggu</option>
+                                        <option value="months">Bulan</option>
+                                        <option value="years">Tahun</option>
+                                    </select>
+                                </div>
                             </div>
                             <small class="text-muted">Warning akan otomatis expire setelah durasi ini</small>
                         </div>
@@ -700,7 +750,7 @@ function getStatusBadge($status, $user = null) {
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-warning">
+                        <button type="submit" class="btn btn-warning" id="submitWarningBtn">
                             <i class="fas fa-exclamation-triangle"></i> Berikan Warning
                         </button>
                     </div>
@@ -713,7 +763,7 @@ function getStatusBadge($status, $user = null) {
     <div class="modal fade" id="banModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST">
+                <form method="POST" id="banForm">
                     <div class="modal-header bg-danger text-white">
                         <h5 class="modal-title">
                             <i class="fas fa-ban"></i> Ban User
@@ -730,18 +780,23 @@ function getStatusBadge($status, $user = null) {
 
                         <div class="mb-3">
                             <label class="form-label">Durasi Ban</label>
-                            <div class="ban-duration-grid">
-                                <input type="number" class="ban-value-input" name="ban_duration_value"
-                                    placeholder="Jumlah" min="1" max="999" required>
-                                <select class="ban-unit-select" name="ban_duration_unit" required>
-                                    <option value="">Pilih Satuan</option>
-                                    <option value="minutes">Menit</option>
-                                    <option value="hours">Jam</option>
-                                    <option value="days">Hari</option>
-                                    <option value="weeks">Minggu</option>
-                                    <option value="months">Bulan</option>
-                                    <option value="years">Tahun</option>
-                                </select>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <input type="number" class="form-control" name="ban_duration_value"
+                                        id="ban_duration_value" placeholder="Jumlah" min="1" max="999" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <select class="form-select" name="ban_duration_unit" id="ban_duration_unit"
+                                        required>
+                                        <option value="">Pilih Satuan</option>
+                                        <option value="minutes">Menit</option>
+                                        <option value="hours">Jam</option>
+                                        <option value="days">Hari</option>
+                                        <option value="weeks">Minggu</option>
+                                        <option value="months">Bulan</option>
+                                        <option value="years">Tahun</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -772,7 +827,7 @@ function getStatusBadge($status, $user = null) {
     <div class="modal fade" id="unbanModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST">
+                <form method="POST" id="unbanForm">
                     <div class="modal-header bg-success text-white">
                         <h5 class="modal-title">
                             <i class="fas fa-unlock"></i> Unban User
@@ -800,7 +855,7 @@ function getStatusBadge($status, $user = null) {
     <div class="modal fade" id="clearWarningModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST">
+                <form method="POST" id="clearWarningForm">
                     <div class="modal-header bg-info text-white">
                         <h5 class="modal-title">
                             <i class="fas fa-eraser"></i> Hapus Semua Warning
@@ -840,7 +895,7 @@ function getStatusBadge($status, $user = null) {
     <div class="modal fade" id="deleteUserModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST">
+                <form method="POST" id="deleteUserForm">
                     <div class="modal-header bg-danger text-white">
                         <h5 class="modal-title">
                             <i class="fas fa-trash"></i> Konfirmasi Hapus
@@ -866,7 +921,17 @@ function getStatusBadge($status, $user = null) {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+    // Global variables for debugging
+    window.userSystemDebug = true;
+
+    function debugLog(message, data = null) {
+        if (window.userSystemDebug) {
+            console.log('[USER SYSTEM] ' + message, data || '');
+        }
+    }
+
     function editUser(user) {
+        debugLog('Opening edit modal for user:', user);
         document.getElementById('edit_user_id').value = user.id;
         document.getElementById('edit_username').value = user.username;
         document.getElementById('edit_email').value = user.email;
@@ -878,33 +943,61 @@ function getStatusBadge($status, $user = null) {
     }
 
     function giveWarning(userId, username) {
+        debugLog('Opening warning modal for user:', {
+            userId,
+            username
+        });
+
+        // Clear previous values first
+        document.getElementById('warning_user_id').value = '';
+        document.getElementById('warning_username').textContent = '';
+        document.getElementById('warning_reason').value = '';
+
+        // Set new values
         document.getElementById('warning_user_id').value = userId;
         document.getElementById('warning_username').textContent = username;
-        document.getElementById('warning_reason').value = '';
 
         // Reset form to default values
         document.getElementById('warning_low').checked = true;
         document.getElementById('warning_duration_value').value = '24';
         document.getElementById('warning_duration_unit').value = 'hours';
 
+        // Enable submit button
+        const submitBtn = document.getElementById('submitWarningBtn');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Berikan Warning';
+
         var warningModal = new bootstrap.Modal(document.getElementById('warningModal'));
         warningModal.show();
+
+        debugLog('Warning modal opened with values:', {
+            userId: document.getElementById('warning_user_id').value,
+            username: document.getElementById('warning_username').textContent
+        });
     }
 
     function banUser(userId, username) {
+        debugLog('Opening ban modal for user:', {
+            userId,
+            username
+        });
         document.getElementById('ban_user_id').value = userId;
         document.getElementById('ban_username').textContent = username;
-        document.getElementById('ban_reason').value = '';
 
         // Reset ban form
-        document.querySelector('input[name="ban_duration_value"]').value = '';
-        document.querySelector('select[name="ban_duration_unit"]').value = '';
+        document.getElementById('ban_duration_value').value = '';
+        document.getElementById('ban_duration_unit').value = '';
+        document.getElementById('ban_reason').value = '';
 
         var banModal = new bootstrap.Modal(document.getElementById('banModal'));
         banModal.show();
     }
 
     function unbanUser(userId, username) {
+        debugLog('Opening unban modal for user:', {
+            userId,
+            username
+        });
         document.getElementById('unban_user_id').value = userId;
         document.getElementById('unban_username').textContent = username;
 
@@ -913,6 +1006,10 @@ function getStatusBadge($status, $user = null) {
     }
 
     function clearWarnings(userId, username) {
+        debugLog('Opening clear warning modal for user:', {
+            userId,
+            username
+        });
         document.getElementById('clear_warning_user_id').value = userId;
         document.getElementById('clear_warning_username').textContent = username;
 
@@ -921,12 +1018,115 @@ function getStatusBadge($status, $user = null) {
     }
 
     function deleteUser(userId, username) {
+        debugLog('Opening delete modal for user:', {
+            userId,
+            username
+        });
         document.getElementById('delete_user_id').value = userId;
         document.getElementById('delete_username').textContent = username;
 
         var deleteModal = new bootstrap.Modal(document.getElementById('deleteUserModal'));
         deleteModal.show();
     }
+
+    // Enhanced form validation for warning
+    document.getElementById('warningForm').addEventListener('submit', function(e) {
+        debugLog('Warning form submitted');
+
+        const userId = document.getElementById('warning_user_id').value;
+        const durationValue = document.getElementById('warning_duration_value').value;
+        const durationUnit = document.getElementById('warning_duration_unit').value;
+        const reason = document.getElementById('warning_reason').value.trim();
+        const warningLevel = document.querySelector('input[name="warning_level"]:checked');
+
+        debugLog('Form values:', {
+            userId: userId,
+            durationValue: durationValue,
+            durationUnit: durationUnit,
+            reason: reason,
+            warningLevel: warningLevel ? warningLevel.value : 'none'
+        });
+
+        // Validation
+        if (!userId || userId === '') {
+            e.preventDefault();
+            alert('Error: User ID tidak valid!');
+            debugLog('ERROR: Missing user ID');
+            return false;
+        }
+
+        if (!durationValue || !durationUnit || !reason || !warningLevel) {
+            e.preventDefault();
+            alert('Mohon lengkapi semua field: level warning, durasi, satuan waktu, dan alasan warning!');
+            debugLog('ERROR: Missing required fields');
+            return false;
+        }
+
+        if (parseInt(durationValue) <= 0) {
+            e.preventDefault();
+            alert('Durasi harus lebih dari 0!');
+            debugLog('ERROR: Invalid duration value');
+            return false;
+        }
+
+        if (reason.length < 5) {
+            e.preventDefault();
+            alert('Alasan warning harus minimal 5 karakter!');
+            debugLog('ERROR: Reason too short');
+            return false;
+        }
+
+        // Confirm before submitting
+        const username = document.getElementById('warning_username').textContent;
+        const level = warningLevel.value;
+        const confirmation = confirm(
+            `Apakah Anda yakin ingin memberikan warning ${level} kepada ${username} selama ${durationValue} ${durationUnit}?\n\nAlasan: ${reason}`
+        );
+
+        if (!confirmation) {
+            e.preventDefault();
+            debugLog('User cancelled warning confirmation');
+            return false;
+        }
+
+        // Show loading state
+        const submitBtn = document.getElementById('submitWarningBtn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+        submitBtn.disabled = true;
+
+        debugLog('Warning form validation passed, submitting...');
+        return true;
+    });
+
+    // Form validation for ban
+    document.getElementById('banForm').addEventListener('submit', function(e) {
+        const userId = document.getElementById('ban_user_id').value;
+        const durationValue = document.getElementById('ban_duration_value').value;
+        const durationUnit = document.getElementById('ban_duration_unit').value;
+        const reason = document.getElementById('ban_reason').value.trim();
+
+        if (!userId || !durationValue || !durationUnit || !reason) {
+            e.preventDefault();
+            alert('Mohon lengkapi semua field ban!');
+            return false;
+        }
+
+        if (parseInt(durationValue) <= 0) {
+            e.preventDefault();
+            alert('Durasi ban harus lebih dari 0!');
+            return false;
+        }
+
+        const username = document.getElementById('ban_username').textContent;
+        const confirmation = confirm(
+            `Apakah Anda yakin ingin ban user ${username} selama ${durationValue} ${durationUnit}?`);
+
+        if (!confirmation) {
+            e.preventDefault();
+            return false;
+        }
+    });
 
     // Function to clean expired warnings
     function cleanExpiredWarnings() {
@@ -968,51 +1168,15 @@ function getStatusBadge($status, $user = null) {
         }
     }
 
-    // Enhanced form validation for warning duration
-    document.getElementById('warningForm').addEventListener('submit', function(e) {
-        const durationValue = document.getElementById('warning_duration_value').value;
-        const durationUnit = document.getElementById('warning_duration_unit').value;
-        const reason = document.getElementById('warning_reason').value.trim();
-
-        if (!durationValue || !durationUnit || !reason) {
-            e.preventDefault();
-            alert('Mohon lengkapi semua field: durasi, satuan waktu, dan alasan warning!');
-            return false;
-        }
-
-        if (parseInt(durationValue) <= 0) {
-            e.preventDefault();
-            alert('Durasi harus lebih dari 0!');
-            return false;
-        }
-
-        // Confirm before submitting
-        const username = document.getElementById('warning_username').textContent;
-        const level = document.querySelector('input[name="warning_level"]:checked').value;
-        const confirmation = confirm(
-            `Apakah Anda yakin ingin memberikan warning ${level} kepada ${username} selama ${durationValue} ${durationUnit}?`
-        );
-
-        if (!confirmation) {
-            e.preventDefault();
-            return false;
-        }
-
-        // Show loading state
-        const submitBtn = e.target.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
-        submitBtn.disabled = true;
-    });
-
     // Auto-refresh warning counts every 30 seconds
     setInterval(() => {
-        console.log('Auto-refreshing warning data...');
+        debugLog('Auto-refreshing warning data...');
 
         fetch('realtime_warning.php')
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    debugLog('Warning data updated:', data);
                     // Update warning counts in table
                     data.users.forEach(user => {
                         const row = document.querySelector(`tr[data-user-id="${user.id}"]`);
@@ -1022,16 +1186,16 @@ function getStatusBadge($status, $user = null) {
                                 // Update warning display
                                 if (user.active_warnings > 0) {
                                     warningCell.innerHTML = `
-                                            <small class="text-warning">
-                                                <i class="fas fa-exclamation-triangle"></i>
-                                                Total: ${user.warning_count} | Aktif: ${user.active_warnings}
-                                            </small>
-                                            ${user.latest_warning ? `
-                                            <small class="text-muted d-block">
-                                                Terakhir: ${new Date(user.latest_warning).toLocaleDateString('id-ID')}
-                                            </small>
-                                            ` : ''}
-                                        `;
+                                        <small class="text-warning">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            Total: ${user.warning_count} | Aktif: ${user.active_warnings}
+                                        </small>
+                                        ${user.latest_warning ? `
+                                        <small class="text-muted d-block">
+                                            Terakhir: ${new Date(user.latest_warning).toLocaleDateString('id-ID')}
+                                        </small>
+                                        ` : ''}
+                                    `;
                                 }
                             }
                         }
@@ -1039,12 +1203,14 @@ function getStatusBadge($status, $user = null) {
                 }
             })
             .catch(error => {
-                console.log('Warning stats update failed:', error);
+                debugLog('Warning stats update failed:', error);
             });
     }, 30000);
 
     // Add data attributes for easier targeting
     document.addEventListener('DOMContentLoaded', function() {
+        debugLog('DOM loaded, initializing user system...');
+
         const rows = document.querySelectorAll('tbody tr');
         rows.forEach(row => {
             const userIdCell = row.querySelector('td:first-child');
@@ -1058,6 +1224,8 @@ function getStatusBadge($status, $user = null) {
         if (durationUnit && !durationUnit.value) {
             durationUnit.value = 'hours';
         }
+
+        debugLog('User system initialized successfully');
     });
 
     // Dynamic duration preview
@@ -1088,7 +1256,7 @@ function getStatusBadge($status, $user = null) {
                     break;
             }
 
-            console.log(`Warning akan aktif selama ${value} ${unitText}`);
+            debugLog(`Duration preview: ${value} ${unitText}`);
 
             // Update the help text
             const helpText = document.querySelector('.warning-duration-grid + small');
@@ -1106,6 +1274,30 @@ function getStatusBadge($status, $user = null) {
         if (durationValue && durationUnit) {
             durationValue.addEventListener('input', updateDurationPreview);
             durationUnit.addEventListener('change', updateDurationPreview);
+        }
+    });
+
+    // Reset forms when modals are hidden
+    document.getElementById('warningModal').addEventListener('hidden.bs.modal', function() {
+        debugLog('Warning modal closed, resetting form');
+        document.getElementById('warningForm').reset();
+        document.getElementById('warning_low').checked = true;
+        document.getElementById('warning_duration_value').value = '24';
+        document.getElementById('warning_duration_unit').value = 'hours';
+
+        // Reset submit button
+        const submitBtn = document.getElementById('submitWarningBtn');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Berikan Warning';
+    });
+
+    // Add form debugging
+    ['warningForm', 'banForm', 'unbanForm', 'clearWarningForm', 'deleteUserForm'].forEach(formId => {
+        const form = document.getElementById(formId);
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                debugLog(`Form ${formId} submitted with data:`, new FormData(form));
+            });
         }
     });
     </script>
