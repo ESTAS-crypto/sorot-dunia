@@ -3,40 +3,53 @@ $baseUrl = 'https://inievan.my.id/project/admin';
 ?>
 <!DOCTYPE html>
 <html lang="id">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Sorot Dunia</title>
+    <link rel="icon" href="/project/img/icon.webp" type="image/webp" />
+    
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
     <style>
+    /* ========== ELEGANT BLACK & WHITE THEME ========== */
     :root {
-        --bg-primary: #1a1a1a;
-        --bg-secondary: #2a2a2a;
-        --bg-accent: #333;
-        --text-primary: #fff;
-        --text-secondary: #ccc;
-        --text-muted: #999;
-        --border-color: #444;
-        --success-color: #28a745;
-        --warning-color: #ffc107;
-        --danger-color: #dc3545;
-        --info-color: #17a2b8;
+        --bg-primary: #0d0d0d;
+        --bg-secondary: #1a1a1a;
+        --bg-tertiary: #262626;
+        --bg-hover: #333333;
+        --border-color: #404040;
+        --text-primary: #ffffff;
+        --text-secondary: #b3b3b3;
+        --text-muted: #ffffffff;
+        --accent: #ffffff;
+        --accent-hover: #f0f0f0;
+        --shadow: rgba(0, 0, 0, 0.3);
+    }
+
+    /* ========== BASE STYLES ========== */
+    * {
+        box-sizing: border-box;
     }
 
     body {
-        background-color: var(--bg-primary);
+        background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
         color: var(--text-primary);
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         margin: 0;
-        padding: 0;
+        min-height: 100vh;
     }
 
+    /* ========== LAYOUT ========== */
     .sidebar {
-        background-color: var(--bg-secondary);
+        background: var(--bg-secondary);
+        backdrop-filter: blur(10px);
+        border-right: 1px solid var(--border-color);
         min-height: 100vh;
         position: fixed;
         top: 0;
@@ -44,7 +57,6 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         width: 280px;
         z-index: 1000;
         transition: transform 0.3s ease;
-        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
         overflow-y: auto;
     }
 
@@ -54,7 +66,7 @@ $baseUrl = 'https://inievan.my.id/project/admin';
 
     .main-content {
         margin-left: 280px;
-        padding: 1rem;
+        padding: 1.5rem;
         transition: margin-left 0.3s ease;
         min-height: 100vh;
     }
@@ -63,138 +75,487 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         margin-left: 0;
     }
 
+    /* ========== SIDEBAR STYLES ========== */
+    .sidebar .nav-link {
+        color: var(--text-secondary);
+        border-radius: 8px;
+        margin-bottom: 4px;
+        padding: 12px 16px;
+        transition: all 0.3s ease;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+    }
+
+    .sidebar .nav-link:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+        transform: translateX(4px);
+    }
+
+    .sidebar .nav-link.active {
+        color: var(--text-primary);
+        background: var(--bg-tertiary);
+        border-left: 3px solid var(--accent);
+    }
+
+    .sidebar .nav-link i {
+        width: 20px;
+        text-align: center;
+        margin-right: 12px;
+    }
+
+    /* ========== CARDS ========== */
     .card {
-        background-color: var(--bg-secondary);
+        background: var(--bg-secondary);
         border: 1px solid var(--border-color);
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        box-shadow: 0 4px 20px var(--shadow);
+        transition: all 0.3s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 40px var(--shadow);
     }
 
     .card-header {
-        background-color: var(--bg-accent);
-        color: var(--text-primary);
+        background: var(--bg-tertiary);
         border-bottom: 1px solid var(--border-color);
-        border-radius: 10px 10px 0 0 !important;
+        border-radius: 12px 12px 0 0 !important;
+        padding: 1.5rem;
     }
 
     .card-body {
         padding: 1.5rem;
     }
 
-    .table-dark {
-        background-color: var(--bg-secondary);
-        border-color: var(--border-color);
+    /* ========== BUTTONS ========== */
+    .btn {
+        border-radius: 8px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        border: none;
     }
 
-    .table-dark th {
-        background-color: var(--bg-accent);
-        border-color: var(--border-color);
+    .btn-primary {
+        background: var(--accent);
+        color: var(--bg-primary);
     }
 
-    .table-dark td {
-        border-color: var(--border-color);
+    .btn-primary:hover {
+        background: var(--accent-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
     }
 
+    .btn-secondary {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+        background: var(--bg-hover);
+        border-color: var(--accent);
+    }
+
+    /* ========== FORMS ========== */
+    .form-control,
+    .form-select {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+        background: var(--bg-hover);
+        border-color: var(--accent);
+        color: var(--text-primary);
+        box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.1);
+    }
+
+    .form-label {
+        color: var(--text-primary);
+        font-weight: 500;
+        margin-bottom: 8px;
+    }
+
+    /* ========== TABLES ========== */
+    .table {
+        background: transparent;
+        color: var(--text-primary);
+    }
+
+    .table th {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--border-color);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+    }
+
+    .table td {
+        border-color: var(--border-color);
+        vertical-align: middle;
+    }
+
+    .table tbody tr:hover {
+        background: var(--bg-hover);
+    }
+
+    .table-responsive {
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+    }
+
+    /* ========== BADGES ========== */
+    .badge {
+        font-weight: 500;
+        border-radius: 6px;
+        padding: 6px 10px;
+    }
+
+    .badge.bg-success {
+        background: #10b981 !important;
+    }
+
+    .badge.bg-warning {
+        background: #f59e0b !important;
+        color: var(--bg-primary) !important;
+    }
+
+    .badge.bg-danger {
+        background: #ef4444 !important;
+    }
+
+    .badge.bg-info {
+        background: #3b82f6 !important;
+    }
+
+    /* ========== ALERTS ========== */
+    .alert {
+        border-radius: 8px;
+        border: none;
+        font-weight: 500;
+    }
+
+    .alert-success {
+        background: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .alert-danger {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    /* ========== MODALS ========== */
+    .modal-content {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        box-shadow: 0 20px 60px var(--shadow);
+    }
+
+    .modal-header {
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-color);
+        border-radius: 12px 12px 0 0;
+    }
+
+    .modal-footer {
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border-color);
+        border-radius: 0 0 12px 12px;
+    }
+
+    /* ========== OVERLAY ========== */
     .sidebar-overlay {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
         z-index: 999;
         display: none;
+        opacity: 0;
+        transition: opacity 0.3s ease;
     }
 
     .sidebar-overlay.show {
         display: block;
+        opacity: 1;
     }
 
-    .nav-link {
-        color: var(--text-secondary) !important;
-        border-radius: 8px;
+    /* ========== ARTICLES PAGE SPECIFIC STYLES ========== */
+    .stats-card {
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .stats-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .stats-card.visitors {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .stats-card.articles {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .stats-card.users {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .stats-card.pending {
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .badge-count {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.75rem;
+        margin-left: 8px;
+    }
+
+    .nav-pills .nav-link {
+        color: var(--text-secondary);
+        background: transparent;
+        border: 1px solid var(--border-color);
+        border-radius: 25px;
+        padding: 8px 16px;
+        margin-right: 8px;
         transition: all 0.3s ease;
     }
 
-    .nav-link.active {
-        background-color: var(--bg-accent);
-        color: var(--text-primary) !important;
+    .nav-pills .nav-link:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+        border-color: var(--accent);
     }
 
-    .nav-link:hover {
-        background-color: var(--bg-accent);
-        color: var(--text-primary) !important;
+    .nav-pills .nav-link.active {
+        color: var(--bg-primary);
+        background: var(--accent);
+        border-color: var(--accent);
     }
 
-    .text-muted {
-        color: var(--text-muted) !important;
+    .action-buttons {
+        display: flex;
+        gap: 4px;
+        justify-content: center;
     }
 
-    .bg-success {
-        background-color: var(--success-color) !important;
+    .btn-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        transition: all 0.3s ease;
+        cursor: pointer;
     }
 
-    .bg-warning {
-        background-color: var(--warning-color) !important;
+    .btn-action:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
 
-    .bg-danger {
-        background-color: var(--danger-color) !important;
+    .btn-view {
+        background: #3b82f6;
+        color: white;
     }
 
-    .bg-info {
-        background-color: var(--info-color) !important;
+    .btn-edit {
+        background: #10b981;
+        color: white;
     }
 
-    .alert {
+    .btn-approve {
+        background: #22c55e;
+        color: white;
+    }
+
+    .btn-reject {
+        background: #ef4444;
+        color: white;
+    }
+
+    .btn-delete {
+        background: #dc2626;
+        color: white;
+    }
+
+    .scroll-hint {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin-bottom: 16px;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        text-align: center;
+        display: block;
+    }
+
+    .image-option-tabs {
+        display: flex;
+        margin-bottom: 16px;
+        gap: 8px;
+    }
+
+    .image-option-tab {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .image-option-tab:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+    }
+
+    .image-option-tab.active {
+        background: var(--accent);
+        color: var(--bg-primary);
+        border-color: var(--accent);
+    }
+
+    .image-option-content {
+        display: none;
+    }
+
+    .image-option-content.active {
+        display: block;
+    }
+
+    .image-upload-section {
+        background: var(--bg-tertiary);
+        border: 2px dashed var(--border-color);
+        border-radius: 8px;
+        padding: 40px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .image-upload-section:hover,
+    .image-upload-section.dragover {
+        border-color: var(--accent);
+        background: var(--bg-hover);
+    }
+
+    .image-preview {
+        max-width: 200px;
+        max-height: 200px;
+        margin-top: 16px;
         border-radius: 8px;
     }
 
-    .btn {
-        border-radius: 6px;
-    }
-
-    /* Statistics Cards */
-    .stat-card {
-        background: linear-gradient(135deg, var(--bg-secondary), var(--bg-accent));
-        border-radius: 12px;
-        padding: 1.5rem;
-        text-align: center;
+    .current-image-display {
+        background: var(--bg-tertiary);
         border: 1px solid var(--border-color);
-        transition: transform 0.3s ease;
+        border-radius: 8px;
+        padding: 16px;
     }
 
-    .stat-card:hover {
-        transform: translateY(-5px);
+    .article-meta {
+        background: var(--bg-tertiary);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 24px;
     }
 
-    .stat-card.total-articles {
-        background: linear-gradient(135deg, #667eea, #764ba2);
+    .article-title {
+        color: var(--text-primary);
+        font-weight: 600;
+        line-height: 1.3;
     }
 
-    .stat-card.total-users {
-        background: linear-gradient(135deg, #f093fb, #f5576c);
-    }
-
-    .stat-card.pending-articles {
-        background: linear-gradient(135deg, #ffecd2, #fcb69f);
-    }
-
-    .stat-card.daily-visitors {
-        background: linear-gradient(135deg, #a8edea, #fed6e3);
-    }
-
-    .stat-number {
-        font-size: 2.5rem;
-        font-weight: bold;
-        margin: 0.5rem 0;
-    }
-
-    .stat-label {
+    .article-content {
+        color: var(--text-secondary);
+        line-height: 1.6;
         font-size: 1rem;
-        opacity: 0.9;
     }
 
+    .article-preview {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 24px;
+    }
+
+    .welcome-alert {
+        animation: slideIn 0.5s ease-out;
+        transition: opacity 0.5s ease-out;
+    }
+
+    .welcome-alert.fade-out {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    .visitor-trend {
+        display: flex;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .visitor-trend:last-child {
+        border-bottom: none;
+    }
+
+    .trend-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16px;
+        font-size: 1.2rem;
+    }
+
+    .trend-up {
+        color: #22c55e;
+    }
+
+    .trend-down {
+        color: #ef4444;
+    }
+
+    .trend-stable {
+        color: #6b7280;
+    }
+
+    /* ========== MOBILE RESPONSIVE ========== */
     @media (max-width: 768px) {
         .sidebar {
             transform: translateX(-100%);
@@ -206,20 +567,83 @@ $baseUrl = 'https://inievan.my.id/project/admin';
 
         .main-content {
             margin-left: 0;
+            padding: 1rem;
         }
+
+        .card-body {
+            padding: 1rem;
+        }
+
+        .scroll-hint {
+            display: block;
+        }
+    }
+
+    @media (min-width: 769px) {
+        .scroll-hint {
+            display: none;
+        }
+    }
+
+    /* ========== ANIMATIONS ========== */
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* ========== UTILITIES ========== */
+    .text-muted {
+        color: var(--text-muted) !important;
+    }
+
+    .border-secondary {
+        border-color: var(--border-color) !important;
+    }
+
+    .bg-secondary {
+        background-color: var(--bg-secondary) !important;
+    }
+
+    .bg-dark {
+        background-color: var(--bg-primary) !important;
+    }
+
+    /* ========== SCROLLBAR ========== */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: var(--bg-tertiary);
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--accent);
     }
     </style>
 </head>
 
 <body>
     <!-- Mobile Navbar -->
-    <nav class="navbar navbar-dark bg-dark d-md-none">
+    <nav class="navbar navbar-dark d-md-none" style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);">
         <div class="container-fluid">
-            <button class="navbar-toggler" type="button" onclick="toggleSidebar()">
+            <button class="navbar-toggler border-0" type="button" onclick="toggleSidebar()">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <span class="navbar-brand mb-0 h1">Sorot Dunia Admin</span>
-            <a href="../logout.php" class="btn btn-outline-danger btn-sm">
+            <a href="../logout.php" class="btn btn-outline-light btn-sm">
                 <i class="bi bi-box-arrow-right"></i>
             </a>
         </div>
@@ -227,22 +651,3 @@ $baseUrl = 'https://inievan.my.id/project/admin';
 
     <!-- Sidebar Overlay -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-
-    <script>
-    function toggleSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.getElementById('sidebarOverlay');
-        const mainContent = document.getElementById('mainContent');
-
-        sidebar.classList.toggle('show');
-        overlay.classList.toggle('show');
-
-        if (window.innerWidth > 768) {
-            sidebar.classList.toggle('collapsed');
-            mainContent.classList.toggle('expanded');
-        }
-    }
-    </script>
-</body>
-
-</html>
