@@ -1,50 +1,102 @@
-# 🌐 Sorot Dunia
+# ![alt text](image.png) Sorot Dunia
 
-![alt text](project/img/Logo.webp)
 
-**Sorot Dunia** adalah platform web berita sederhana yang dirancang untuk menyajikan berita lokal dan internasional dengan tampilan bersih, terstruktur, dan mudah dikembangkan. README ini ditulis untuk membantu kamu (pengembang / admin) memulai, mengonfigurasikan, dan mengembangkan proyek ini lebih lanjut.
-
----
-
-## 🎯 Tujuan Proyek
-
-1. Menyajikan berita secara cepat dan rapi.
-2. Menjadi basis yang mudah dikembangkan untuk fitur-fitur jurnalistik (kategori, tag, draft, publikasi terjadwal, dsb.).
-3. Memberikan struktur kode yang mudah dipahami bagi developer pemula sampai menengah.
+> **Sorot Dunia** — portal berita modern yang menghadirkan kabar lokal & internasional dengan desain ringan, responsif, dan ramah pembaca.
 
 ---
 
-## ✨ Fitur Utama (lebih lengkap)
+## 🎯 Visi
 
-* Halaman beranda yang menampilkan ringkasan berita terbaru.
-* Halaman kategori untuk mengelompokkan berita.
-* Halaman detail artikel lengkap dengan gambar, metadata, dan slug SEO.
-* Pencarian sederhana berdasarkan judul / isi.
-* Sistem draf (opsional) untuk menyimpan artikel sebelum dipublikasi.
-* Struktur modular view (multi-view) sehingga mudah menambah layout baru.
-* Responsif: tampilan mendukung mobile dan desktop.
-* Upload gambar untuk artikel (pastikan folder `uploads/` punya permission).
+Menyajikan informasi **cepat, ringkas, dan terpercaya** dengan tampilan elegan yang membuat pembaca fokus pada inti berita.
 
 ---
 
-## 🛠️ Teknologi & Struktur Proyek
+## 🌟 Fitur Utama
 
-| Komponen | Teknologi | Keterangan |
-|----------|-----------|------------|
-| Backend / logika | PHP | Pemrosesan data berita & routing |
-| Frontend | HTML / CSS / JavaScript | Antarmuka pengguna & interaktivitas |
-| Struktur folder | `project/`, `multi-view.php`, `index.php`, dll | Organisasi modul tampilan & logika |
-| Database (opsional) | — | Jika kamu memakai DB, sambungkan di modul backend |
+### 👥 Untuk Pembaca
+
+* 📰 **Beranda Dinamis** — rangkuman berita terbaru dalam tampilan yang bersih.
+* 📂 **Kategori Berita** — Politik, Ekonomi, Teknologi, Budaya, dan lainnya.
+* 🔎 **Pencarian Cepat** — temukan artikel hanya dengan satu kata kunci.
+* 📱 **Desain Responsif** — nyaman dibaca di desktop, tablet, dan smartphone.
+* 🔗 **Tombol Bagikan** — sebarkan berita ke media sosial dengan sekali klik.
+
+### ✍️ Untuk Penulis & Admin
+
+* ✨ **Editor Artikel Sederhana** — unggah judul, isi, gambar, dan kategori.
+* 🗂️ **Status Artikel** — simpan sebagai *Draft* atau publikasikan langsung.
+* 🖼️ **Manajemen Gambar** — unggah foto pendukung berita.
+* 🌐 **URL SEO-Friendly** — slug otomatis untuk setiap artikel.
 
 ---
 
+## 🛠️ Teknologi yang Digunakan
 
-## 📥 Instalasi & Setup (Langkah demi langkah)
+* **Backend:** PHP sederhana (mudah dipahami & dikembangkan)
+* **Frontend:** HTML, CSS, JavaScript (ringan & cepat dimuat)
+* **Database:** MySQL / MariaDB *(opsional, bisa tanpa DB untuk prototipe)*
+* **Server:** Kompatibel dengan XAMPP, LAMP, Laragon, atau hosting standar
 
-1. Clone repository:
+---
 
-   ```bash
-   git clone https://github.com/ESTAS-crypto/sorot-dunia.git
-   cd sorot-dunia
-   ```
+## 🚀 Alur Penggunaan
 
+**Pembaca:**
+
+1. Buka halaman beranda
+2. Pilih kategori atau gunakan pencarian
+3. Baca artikel & bagikan ke media sosial
+
+**Admin / Penulis:**
+
+1. Masuk ke halaman unggah berita
+2. Tulis judul, isi, pilih kategori, dan tambahkan gambar
+3. Simpan sebagai *Draft* atau **Publish** untuk tampil di beranda
+
+---
+
+## 💎 Keunggulan Sorot Dunia
+
+* **Sederhana & Elegan** — desain minimalis dengan fokus pada konten.
+* **Mudah Dikembangkan** — cocok sebagai proyek belajar maupun basis sistem berita profesional.
+* **Ringan & Cepat** — tidak membutuhkan server besar, dapat berjalan di hosting murah.
+
+---
+
+## 🔮 Rekomendasi Pengembangan
+
+* 🧑‍🤝‍🧑 Tambahkan sistem user (Admin, Editor, Penulis)
+* ⏰ Publikasi terjadwal untuk artikel
+* 📝 Editor teks WYSIWYG (CKEditor / TinyMCE)
+* 💬 Fitur komentar & moderasi
+* 📡 RSS Feed & Sitemap untuk SEO
+* 📱 API sederhana untuk aplikasi mobile
+
+---
+
+## 🔐 Keamanan Dasar
+
+* Validasi & sanitasi input form
+* Batasi ukuran & jenis file upload
+* Sembunyikan konfigurasi sensitif (gunakan `.env` atau `config.local.php`)
+
+---
+
+## 📜 Lisensi
+
+Proyek ini terbuka untuk dikembangkan bersama. Gunakan lisensi **MIT** atau lisensi lain sesuai kebutuhan.
+
+```
+MIT License © 2025 - Sorot Dunia Project
+```
+
+---
+
+## 📬 Kontak
+
+* 🌐 Repo GitHub: [Sorot Dunia](https://github.com/ESTAS-crypto/sorot-dunia)
+* 📧 Email: [eatharasya@gmail.com](mailto:eatharasya@gmail.com)
+
+---
+
+✨ Dengan **Sorot Dunia**, informasi bukan hanya cepat — tapi juga tampil lebih **cantik, elegan, dan relevan**.
