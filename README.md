@@ -1,17 +1,29 @@
 # 🌐 Sorot Dunia
 
-**Sorot Dunia** adalah portal berita daring dengan visi menyajikan kabar global dan lokal secara cepat, akurat, dan mendalam. Kami percaya bahwa informasi yang tepat waktu & berimbang adalah pondasi masyarakat yang cerdas & kritis.
+![Sorot Dunia](../img/logo.png)
+
+**Sorot Dunia** adalah platform web berita sederhana yang dirancang untuk menyajikan berita lokal dan internasional dengan tampilan bersih, terstruktur, dan mudah dikembangkan. README ini ditulis untuk membantu kamu (pengembang / admin) memulai, mengonfigurasikan, dan mengembangkan proyek ini lebih lanjut.
 
 ---
 
-## 🧭 Fitur Utama
+## 🎯 Tujuan Proyek
 
-- Tampilkan berbagai kategori berita (politik, teknologi, ekonomi, budaya, dll)  
-- Sistem *multi-view* untuk tampilan dinamis dan responsif  
-- Halaman detail berita lengkap dengan gambar, video, dan metadata  
-- Pencarian & filter berdasarkan kata kunci, tanggal, atau kategori  
-- Tampilan mobile-friendly (responsif)  
-- Struktur kode modular & mudah dikembangkan  
+1. Menyajikan berita secara cepat dan rapi.
+2. Menjadi basis yang mudah dikembangkan untuk fitur-fitur jurnalistik (kategori, tag, draft, publikasi terjadwal, dsb.).
+3. Memberikan struktur kode yang mudah dipahami bagi developer pemula sampai menengah.
+
+---
+
+## ✨ Fitur Utama (lebih lengkap)
+
+* Halaman beranda yang menampilkan ringkasan berita terbaru.
+* Halaman kategori untuk mengelompokkan berita.
+* Halaman detail artikel lengkap dengan gambar, metadata, dan slug SEO.
+* Pencarian sederhana berdasarkan judul / isi.
+* Sistem draf (opsional) untuk menyimpan artikel sebelum dipublikasi.
+* Struktur modular view (multi-view) sehingga mudah menambah layout baru.
+* Responsif: tampilan mendukung mobile dan desktop.
+* Upload gambar untuk artikel (pastikan folder `uploads/` punya permission).
 
 ---
 
@@ -26,11 +38,13 @@
 
 ---
 
-## 🚀 Cara Instalasi / Setup
 
-Berikut panduan dasar untuk menjalankan Sorot Dunia di lingkungan lokal atau server:
+## 📥 Instalasi & Setup (Langkah demi langkah)
 
-1. **Clone repo**  
+1. Clone repository:
+
    ```bash
    git clone https://github.com/ESTAS-crypto/sorot-dunia.git
    cd sorot-dunia
+   ```
+
