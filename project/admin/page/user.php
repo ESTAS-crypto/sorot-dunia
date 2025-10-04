@@ -1578,7 +1578,7 @@ function getStatusBadge($status, $user = null) {
     setInterval(() => {
         debugLog('Auto-refreshing warning data...');
 
-        fetch('realtime_warning.php')
+        fetch('realtime_waring.php')
             .then(response => response.json())
             .then(data => {
                 if (data.success) {

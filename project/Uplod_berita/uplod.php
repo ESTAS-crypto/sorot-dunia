@@ -2,6 +2,12 @@
 $page_title = "Upload Berita";
 require_once 'header.php';
 
+// Pastikan user memiliki role yang tepat
+if (!in_array($current_user['role'], ['admin', 'penulis'])) {
+    header('Location: ../index.php');
+    exit();
+}
+
 // Get categories from database
 $categories_query = "SELECT name FROM categories ORDER BY name ASC";
 $categories_result = mysqli_query($koneksi, $categories_query);
@@ -10,195 +16,1155 @@ while ($row = mysqli_fetch_assoc($categories_result)) {
     $categories[] = $row['name'];
 }
 
-// If no categories found, add default ones
 if (empty($categories)) {
     $categories = ['politik', 'ekonomi', 'olahraga', 'teknologi', 'hiburan', 'kesehatan', 'pendidikan', 'kriminal', 'internasional', 'lainnya'];
 }
+
+// ===== PERBAIKAN UTAMA: Check if editing existing article - USING SLUG =====
+$editing = false;
+$article_data = null;
+$existing_tags = [];
+$article_image = null;
+
+if (isset($_GET['slug']) && !empty($_GET['slug'])) {
+    $article_slug = trim($_GET['slug']);
+    
+    // Query menggunakan slug JOIN dengan table slugs
+    if (isAdmin()) {
+        $article_query = "SELECT a.*, s.slug, c.name as category_name, 
+                         GROUP_CONCAT(DISTINCT t.name) as tag_names,
+                         i.id as image_id, i.filename as image_filename, 
+                         i.url as image_url, i.is_external as image_is_external
+                         FROM articles a 
+                         LEFT JOIN slugs s ON (s.related_id = a.article_id AND s.type = 'article')
+                         LEFT JOIN categories c ON a.category_id = c.category_id
+                         LEFT JOIN article_tags at ON a.article_id = at.article_id
+                         LEFT JOIN tags t ON at.tag_id = t.id
+                         LEFT JOIN images i ON a.featured_image_id = i.id
+                         WHERE s.slug = ?
+                         GROUP BY a.article_id";
+    } else {
+        $article_query = "SELECT a.*, s.slug, c.name as category_name, 
+                         GROUP_CONCAT(DISTINCT t.name) as tag_names,
+                         i.id as image_id, i.filename as image_filename, 
+                         i.url as image_url, i.is_external as image_is_external
+                         FROM articles a 
+                         LEFT JOIN slugs s ON (s.related_id = a.article_id AND s.type = 'article')
+                         LEFT JOIN categories c ON a.category_id = c.category_id
+                         LEFT JOIN article_tags at ON a.article_id = at.article_id
+                         LEFT JOIN tags t ON at.tag_id = t.id
+                         LEFT JOIN images i ON a.featured_image_id = i.id
+                         WHERE s.slug = ? AND a.author_id = ?
+                         GROUP BY a.article_id";
+    }
+    
+    $stmt = mysqli_prepare($koneksi, $article_query);
+    
+    if (isAdmin()) {
+        mysqli_stmt_bind_param($stmt, "s", $article_slug);
+    } else {
+        mysqli_stmt_bind_param($stmt, "si", $article_slug, $current_user['id']);
+    }
+    
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $article_data = mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
+    
+    if ($article_data) {
+        $editing = true;
+        
+        // Parse tags
+        if (!empty($article_data['tag_names'])) {
+            $existing_tags = explode(',', $article_data['tag_names']);
+        }
+        
+        // Get image info
+        if ($article_data['image_id']) {
+            $article_image = [
+                'id' => $article_data['image_id'],
+                'filename' => $article_data['image_filename'],
+                'url' => $article_data['image_url'],
+                'is_external' => $article_data['image_is_external']
+            ];
+        }
+        
+    } else {
+        // Article not found or no access
+        header('Location: manage.php?error=article_not_found');
+        exit();
+    }
+}
 ?>
+
+<!-- Summernote CSS Bootstrap 5 -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/summernote/0.8.20/summernote-bs5.min.css" rel="stylesheet">
+
+<style>
+/* Upload page specific styles */
+.upload-form-container {
+    background: var(--white);
+    border-radius: 15px;
+    padding: 2rem;
+    margin: 2rem 0;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    border: 1px solid var(--border-color);
+}
+
+.upload-header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.upload-header h2 {
+    color: var(--primary-color);
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    font-size: 2rem;
+}
+
+.upload-header p {
+    color: var(--accent-color);
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.form-floating {
+    margin-bottom: 1.5rem;
+}
+
+.char-counter {
+    position: absolute;
+    bottom: -20px;
+    right: 10px;
+    font-size: 0.875rem;
+    color: var(--accent-color);
+}
+
+.slug-container {
+    margin-bottom: 1.5rem;
+    padding: 0.75rem;
+    background: var(--light-gray);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.slug-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent-color);
+    margin-bottom: 0.25rem;
+}
+
+.slug-display {
+    font-family: monospace;
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+.file-upload-area {
+    border: 3px dashed var(--border-color);
+    border-radius: 15px;
+    padding: 3rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: var(--white);
+    margin-bottom: 1.5rem;
+}
+
+.file-upload-area:hover,
+.file-upload-area.dragover {
+    border-color: var(--primary-color);
+    background: rgba(0,0,0,0.02);
+}
+
+.upload-progress {
+    display: none;
+    margin-top: 1rem;
+}
+
+.upload-status {
+    display: none;
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+.upload-status.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.upload-status.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.uploaded-info {
+    display: none;
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--light-gray);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.tag-display {
+    min-height: 40px;
+    padding: 0.75rem;
+    background: var(--light-gray);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    margin-top: 0.5rem;
+}
+
+.tag-item {
+    display: inline-block;
+    background: var(--primary-color);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    margin: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.tag-remove {
+    background: none;
+    border: none;
+    color: white;
+    margin-left: 0.5rem;
+    cursor: pointer;
+}
+
+/* Summernote Bootstrap 5 Styles */
+.note-editor {
+    border: 2px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    margin-bottom: 1.5rem;
+}
+
+.note-editor.note-frame {
+    border-color: var(--border-color) !important;
+}
+
+.note-toolbar {
+    background: #f8f9fa !important;
+    border-bottom: 2px solid var(--border-color) !important;
+    border-radius: 12px 12px 0 0 !important;
+    padding: 10px !important;
+}
+
+.note-btn-group {
+    margin-right: 5px;
+}
+
+.note-btn {
+    background: white !important;
+    border: 1px solid #dee2e6 !important;
+    border-radius: 4px !important;
+    padding: 5px 10px !important;
+    margin: 2px !important;
+}
+
+.note-btn:hover {
+    background: var(--primary-color) !important;
+    color: white !important;
+    border-color: var(--primary-color) !important;
+}
+
+.note-btn.active,
+.note-btn:active {
+    background: var(--primary-color) !important;
+    color: white !important;
+}
+
+.note-editable {
+    min-height: 400px !important;
+    padding: 20px !important;
+    font-size: 16px !important;
+    line-height: 1.6 !important;
+    background: white !important;
+}
+
+.note-editable:focus {
+    outline: none !important;
+    background: white !important;
+}
+
+.note-statusbar {
+    background: #f8f9fa !important;
+    border-top: 1px solid var(--border-color) !important;
+}
+
+.note-editor .dropdown-menu {
+    z-index: 9999 !important;
+    display: none;
+    position: absolute;
+}
+
+.note-editor .dropdown-menu.show {
+    display: block !important;
+}
+
+/* Action buttons */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 2px solid var(--border-color);
+}
+
+.btn-draft {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: var(--white);
+}
+
+.btn-draft:hover {
+    background: var(--secondary-color);
+    border-color: var(--secondary-color);
+    color: var(--white);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .note-toolbar {
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .note-btn-group {
+        display: inline-block;
+        vertical-align: top;
+    }
+    
+    .note-editable {
+        min-height: 300px !important;
+        font-size: 16px !important;
+    }
+}
+</style>
 
 <!-- Main Content -->
 <div class="container" style="margin-top: 100px; margin-bottom: 50px;">
-    <div class="row justify-content-center">
-        <div class="col-lg-10 col-xl-9">
-            <div class="upload-container">
-                <div class="upload-header">
-                    <h2><i class="fas fa-plus-circle me-3"></i>Upload Berita Baru</h2>
-                    <p>Bagikan berita terbaru untuk pembaca setia Sorot Dunia</p>
+    <div class="upload-form-container">
+        <div class="upload-header">
+            <h2>
+                <i class="fas fa-<?php echo $editing ? 'edit' : 'plus-circle'; ?> me-3"></i>
+                <?php echo $editing ? 'Edit Berita' : 'Upload Berita Baru'; ?>
+            </h2>
+            <p>
+                <?php if ($editing): ?>
+                    Perbarui artikel "<?php echo htmlspecialchars($article_data['title']); ?>"
+                <?php else: ?>
+                    Bagikan berita terbaru untuk pembaca setia Sorot Dunia
+                <?php endif; ?>
+            </p>
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+            <input type="hidden" name="featured_image_id" id="featuredImageId" 
+                value="<?php echo $editing && $article_image ? $article_image['id'] : ''; ?>">
+            <?php if ($editing): ?>
+            <input type="hidden" name="article_id" value="<?php echo $article_data['article_id']; ?>">
+            <input type="hidden" name="article_slug" value="<?php echo $article_data['slug']; ?>">
+            <?php endif; ?>
+
+            <div class="row">
+                <div class="col-md-8">
+                    <!-- Judul -->
+                    <div class="form-floating position-relative">
+                        <input type="text" class="form-control" id="title" name="title"
+                            placeholder="Judul Berita" required maxlength="200"
+                            value="<?php echo $editing ? htmlspecialchars($article_data['title']) : ''; ?>">
+                        <label for="title">Judul Berita *</label>
+                        <div class="char-counter" id="titleCounter">0/200</div>
+                    </div>
+
+                    <!-- Slug Display -->
+                    <div class="slug-container" id="slugContainer" 
+                        style="<?php echo $editing && !empty($article_data['slug']) ? 'display: block;' : 'display: none;'; ?>">
+                        <div class="slug-label">URL Slug</div>
+                        <div class="slug-display" id="slugDisplay">
+                            <?php echo $editing ? htmlspecialchars($article_data['slug']) : ''; ?>
+                        </div>
+                    </div>
+
+                    <!-- Ringkasan -->
+                    <div class="form-floating position-relative">
+                        <textarea class="form-control" id="summary" name="summary"
+                            placeholder="Ringkasan berita" style="height: 120px" required
+                            maxlength="300"><?php echo $editing ? htmlspecialchars($article_data['meta_description']) : ''; ?></textarea>
+                        <label for="summary">Ringkasan Berita *</label>
+                        <div class="char-counter" id="summaryCounter">0/300</div>
+                    </div>
+
+                    <!-- Konten dengan Summernote -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-edit me-2"></i>Konten Berita *
+                        </label>
+                        <textarea class="form-control" id="content" name="content" required><?php echo $editing ? $article_data['content'] : ''; ?></textarea>
+                        <div class="char-counter" id="contentCounter" style="position: relative; text-align: right; margin-top: 5px;">0 karakter</div>
+                    </div>
                 </div>
 
-                <!-- Alert akan ditampilkan di sini oleh JavaScript -->
-
-                <form id="uploadForm" enctype="multipart/form-data" novalidate>
-                    <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
-
-                    <div class="row">
-                        <div class="col-md-8">
-                            <!-- Judul Berita -->
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="title" name="title"
-                                    placeholder="Judul Berita" required maxlength="200">
-                                <label for="title">Judul Berita <span class="required">*</span></label>
-                                <div class="char-counter" id="titleCounter">0/200</div>
-                                <div class="invalid-feedback">
-                                    Judul berita harus diisi dan maksimal 200 karakter.
-                                </div>
-                            </div>
-
-                            <!-- Slug Display -->
-                            <div class="slug-container" id="slugContainer" style="display: none;">
-                                <div class="slug-label">URL Slug (Preview)</div>
-                                <div class="slug-display" id="slugDisplay"></div>
-                            </div>
-
-                            <!-- Ringkasan -->
-                            <div class="form-floating">
-                                <textarea class="form-control" id="summary" name="summary"
-                                    placeholder="Ringkasan berita" style="height: 120px" required
-                                    maxlength="300"></textarea>
-                                <label for="summary">Ringkasan Berita <span class="required">*</span></label>
-                                <div class="char-counter" id="summaryCounter">0/300</div>
-                                <div class="invalid-feedback">
-                                    Ringkasan berita harus diisi dan maksimal 300 karakter.
-                                </div>
-                            </div>
-
-                            <!-- Konten Berita -->
-                            <div class="form-floating">
-                                <textarea class="form-control" id="content" name="content"
-                                    placeholder="Konten lengkap berita" style="height: 250px" required
-                                    maxlength="5000"></textarea>
-                                <label for="content">Konten Berita <span class="required">*</span></label>
-                                <div class="char-counter" id="contentCounter">0/5000</div>
-                                <div class="invalid-feedback">
-                                    Konten berita harus diisi dan maksimal 5000 karakter.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-4">
-                            <!-- Kategori -->
-                            <div class="form-floating">
-                                <select class="form-select" id="category" name="category" required>
-                                    <option value="">Pilih Kategori</option>
-                                    <?php foreach ($categories as $category): ?>
-                                    <option value="<?php echo htmlspecialchars($category); ?>">
-                                        <?php echo ucfirst(htmlspecialchars($category)); ?>
-                                    </option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <label for="category">Kategori <span class="required">*</span></label>
-                                <div class="invalid-feedback">
-                                    Pilih kategori berita yang sesuai.
-                                </div>
-                            </div>
-
-                            <!-- Tag Input with Enhanced UI -->
-                            <div class="tag-input-container">
-                                <div class="form-floating">
-                                    <input type="text" class="form-control" id="tagInput"
-                                        placeholder="Ketik tag dan tekan Enter">
-                                    <label for="tagInput">Tambah Tag
-                                        <span class="tooltip-custom" data-tooltip="Ketik tag dan tekan Enter atau koma">
-                                            <i class="fas fa-info-circle"></i>
-                                        </span>
-                                    </label>
-                                </div>
-
-                                <!-- Tag Display Area -->
-                                <div class="tag-display" id="tagDisplay">
-                                    <div class="text-muted" id="tagPlaceholder">
-                                        <i class="fas fa-tag me-2"></i>Tag akan muncul di sini
-                                    </div>
-                                </div>
-
-                                <!-- Hidden input for tags -->
-                                <input type="hidden" name="tags" id="tagsHidden">
-
-                                <!-- Tag Suggestions -->
-                                <div class="tag-suggestions" id="tagSuggestions"></div>
-                            </div>
-
-                            <!-- Status Info for Penulis -->
-                            <?php if ($current_user['role'] === 'penulis'): ?>
-                            <div class="alert alert-info alert-custom">
-                                <i class="fas fa-info-circle me-2"></i>
-                                <div>
-                                    <strong>Catatan:</strong> Artikel Anda akan masuk ke status "pending" dan menunggu
-                                    persetujuan admin sebelum dipublikasikan.
-                                </div>
-                            </div>
-                            <?php endif; ?>
-                        </div>
+                <div class="col-md-4">
+                    <!-- Kategori -->
+                    <div class="form-floating">
+                        <select class="form-select" id="category" name="category" required>
+                            <option value="">Pilih Kategori</option>
+                            <?php foreach ($categories as $cat): ?>
+                            <option value="<?php echo htmlspecialchars($cat); ?>" 
+                                <?php echo ($editing && isset($article_data['category_name']) && $cat === $article_data['category_name']) ? 'selected' : ''; ?>>
+                                <?php echo ucfirst(htmlspecialchars($cat)); ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <label for="category">Kategori *</label>
                     </div>
 
-                    <!-- Upload Gambar -->
-                    <div class="mb-4">
-                        <label class="form-label fw-bold">
-                            <i class="fas fa-image me-2"></i>Gambar Berita
-                            <span class="tooltip-custom"
-                                data-tooltip="Gambar akan otomatis dioptimalkan ke format WebP dengan ukuran maksimal 300KB">
-                                <i class="fas fa-info-circle"></i>
-                            </span>
-                        </label>
-                        <div class="file-upload-wrapper">
-                            <input type="file" class="file-upload-input" id="image" name="image"
-                                accept="image/jpeg,image/jpg,image/png,image/webp,image/gif">
-                            <label for="image" class="file-upload-label">
-                                <div class="file-upload-icon">
-                                    <i class="fas fa-cloud-upload-alt"></i>
-                                </div>
-                                <h5 class="file-upload-text">Klik untuk upload gambar</h5>
-                                <p class="file-upload-subtext">Atau drag & drop file gambar di sini</p>
-                                <div class="file-upload-info">
-                                    <strong>Format yang didukung:</strong> JPG, PNG, GIF, WebP<br>
-                                    <strong>Ukuran maksimal:</strong> 5MB (akan dioptimalkan ke 300KB WebP)
-                                </div>
-                            </label>
+                    <!-- Tag -->
+                    <div class="mb-3">
+                        <label class="form-label">Tambah Tag</label>
+                        <input type="text" class="form-control" id="tagInput" 
+                            placeholder="Ketik tag dan tekan Enter atau koma">
+                        <div class="tag-display" id="tagDisplay">
+                            <span class="text-muted">Tag akan muncul di sini</span>
                         </div>
-
-                        <!-- Preview Container -->
-                        <div class="preview-container" id="previewContainer">
-                            <img class="preview-image" id="previewImage" alt="Preview">
-                            <button type="button" class="remove-preview" onclick="removePreview()" title="Hapus gambar">
-                                <i class="fas fa-times"></i>
-                            </button>
-                            <div class="preview-info" id="previewInfo"></div>
-                        </div>
+                        <input type="hidden" name="tags" id="tagsHidden">
                     </div>
 
-                    <!-- Upload Progress -->
-                    <div class="upload-progress" id="uploadProgress">
-                        <label class="form-label fw-bold">
-                            <i class="fas fa-upload me-2"></i>Progress Upload
-                        </label>
-                        <div class="progress">
-                            <div class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0"
-                                aria-valuemin="0" aria-valuemax="100"></div>
-                        </div>
+                    <!-- Status Info -->
+                    <?php if ($editing): ?>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Status:</strong> <?php echo ucfirst($article_data['article_status']); ?>
                     </div>
-
-                    <!-- Action Buttons -->
-                    <div class="d-grid gap-3 d-md-flex justify-content-md-end pt-4 border-top">
-                        <button type="button" class="btn btn-secondary" onclick="resetForm()">
-                            <i class="fas fa-undo me-2"></i>Reset Form
-                        </button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-upload me-2"></i>
-                            <?php echo ($current_user['role'] === 'admin') ? 'Publish Berita' : 'Upload Berita'; ?>
-                        </button>
+                    <?php elseif ($current_user['role'] === 'penulis'): ?>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Catatan:</strong> Artikel akan menunggu persetujuan admin.
                     </div>
-
-                    <!-- Keyboard Shortcuts Info -->
-                    <div class="mt-4 text-center">
-                        <small class="text-muted">
-                            <i class="fas fa-keyboard me-1"></i>
-                            Keyboard shortcuts: <kbd>Ctrl+Enter</kbd> untuk submit, <kbd>Esc</kbd> untuk reset
-                        </small>
-                    </div>
-                </form>
+                    <?php endif; ?>
+                </div>
             </div>
-        </div>
+
+            <!-- Upload Gambar -->
+            <div class="mb-4">
+                <label class="form-label fw-bold">
+                    <i class="fas fa-image me-2"></i>Gambar Berita
+                </label>
+                
+                <div class="file-upload-area" id="dropZone" onclick="document.getElementById('image').click()">
+                    <input type="file" id="image" name="image" style="display: none;"
+                        accept="image/jpeg,image/jpg,image/png,image/webp,image/gif">
+                    
+                    <div>
+                        <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                        <h5>Klik atau Drag & Drop Gambar</h5>
+                        <p class="text-muted">Format: JPG, PNG, GIF, WebP | Maksimal: 5MB<br>
+                        Auto-convert ke WebP, resize max 1000px, compress max 300KB</p>
+                    </div>
+                </div>
+
+                <div class="upload-progress" id="uploadProgress">
+                    <div class="progress">
+                        <div class="progress-bar" id="progressBar" style="width: 0%">0%</div>
+                    </div>
+                </div>
+
+                <div class="upload-status" id="uploadStatus"></div>
+
+                <div class="uploaded-info" id="uploadedInfo" 
+                    <?php echo ($editing && $article_image) ? 'style="display: block;"' : ''; ?>>
+                    <div class="d-flex align-items-center">
+                        <img id="uploadedThumbnail" width="60" height="60" class="rounded me-3"
+                            <?php if ($editing && $article_image): ?>
+                                src="<?php echo htmlspecialchars($article_image['url']); ?>"
+                            <?php endif; ?>>
+                        <div>
+                            <h6 id="uploadedName" class="mb-1">
+                                <?php echo $editing && $article_image ? htmlspecialchars($article_image['filename']) : ''; ?>
+                            </h6>
+                            <small id="uploadedDetails" class="text-muted">
+                                <?php echo $editing && $article_image ? 'Gambar saat ini' : ''; ?>
+                            </small>
+                            <br>
+                            <button type="button" class="btn btn-sm btn-outline-danger mt-1" onclick="removeImage()">
+                                Hapus
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                    <i class="fas fa-undo me-2"></i>Reset
+                </button>
+                
+                <button type="button" class="btn btn-draft" id="saveDraftBtn" onclick="saveDraft()">
+                    <i class="fas fa-save me-2"></i>Simpan Draft
+                </button>
+                
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <i class="fas fa-<?php echo $editing ? 'save' : 'upload'; ?> me-2"></i>
+                    <?php 
+                    if ($editing) {
+                        echo 'Update Berita';
+                    } else {
+                        echo ($current_user['role'] === 'admin') ? 'Publish Berita' : 'Submit Berita';
+                    }
+                    ?>
+                </button>
+            </div>
+        </form>
     </div>
 </div>
+
+<!-- Load Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/summernote/0.8.20/summernote-bs5.min.js"></script>
+
+<script>
+let summernoteInitialized = false;
+
+document.addEventListener('DOMContentLoaded', function() {
+    'use strict';
+    
+    let tags = <?php echo json_encode($existing_tags); ?> || [];
+    let uploadedImageId = <?php echo $editing && $article_image ? $article_image['id'] : 'null'; ?>;
+    let isEditing = <?php echo $editing ? 'true' : 'false'; ?>;
+    let isSubmitting = false;
+
+    // Initialize Summernote
+    initializeSummernote();
+    
+    // Initialize all functionality
+    initSlugGeneration();
+    initCharCounters();
+    initTagManagement();
+    initDragDrop();
+    initFormSubmission();
+    
+    if (tags.length > 0) {
+        updateTagDisplay();
+    }
+    
+    updateAllCounters();
+
+    function initializeSummernote() {
+        if (typeof $ === 'undefined') {
+            console.error('jQuery is not loaded');
+            return;
+        }
+        
+        const $editor = $('#content');
+        
+        if (!$editor.length) {
+            console.error('Content textarea not found');
+            return;
+        }
+        
+        if ($editor.data('summernote')) {
+            $editor.summernote('destroy');
+        }
+        
+        $editor.summernote({
+            height: 400,
+            minHeight: 300,
+            maxHeight: 600,
+            placeholder: 'Tulis konten berita lengkap di sini...',
+            focus: false,
+            toolbar: [
+                ['style', ['style']],
+                ['font', ['bold', 'underline', 'clear']],
+                ['fontname', ['fontname']],
+                ['fontsize', ['fontsize']],
+                ['color', ['color']],
+                ['para', ['ul', 'ol', 'paragraph']],
+                ['table', ['table']],
+                ['insert', ['link', 'picture', 'video', 'hr']],
+                ['view', ['fullscreen', 'codeview', 'help']]
+            ],
+            fontNames: ['Arial', 'Arial Black', 'Comic Sans MS', 'Courier New', 'Helvetica', 'Impact', 'Tahoma', 'Times New Roman', 'Verdana'],
+            fontNamesIgnoreCheck: ['Arial', 'Arial Black', 'Comic Sans MS', 'Courier New', 'Helvetica', 'Impact', 'Tahoma', 'Times New Roman', 'Verdana'],
+            fontSizes: ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '36'],
+            styleTags: ['p', 'blockquote', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+            dialogsInBody: true,
+            callbacks: {
+                onChange: function(contents, $editable) {
+                    updateContentCounter();
+                },
+                onPaste: function(e) {
+                    setTimeout(function() {
+                        updateContentCounter();
+                    }, 100);
+                },
+                onInit: function() {
+                    console.log('✓ Summernote initialized successfully');
+                    summernoteInitialized = true;
+                    updateContentCounter();
+                    
+                    setTimeout(function() {
+                        $('.note-editor .dropdown-toggle').on('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            
+                            const $dropdown = $(this).next('.dropdown-menu');
+                            $('.note-editor .dropdown-menu').not($dropdown).removeClass('show');
+                            $dropdown.toggleClass('show');
+                            
+                            return false;
+                        });
+                        
+                        $(document).on('click', function(e) {
+                            if (!$(e.target).closest('.note-editor .dropdown').length) {
+                                $('.note-editor .dropdown-menu').removeClass('show');
+                            }
+                        });
+                    }, 500);
+                }
+            }
+        });
+    }
+
+    function getEl(id) {
+        try {
+            return document.getElementById(id);
+        } catch (e) {
+            console.error('Element not found:', id);
+            return null;
+        }
+    }
+
+    function safeString(str, operation) {
+        try {
+            if (str === null || str === undefined) return '';
+            if (typeof str !== 'string') str = String(str);
+            
+            switch(operation) {
+                case 'trim': return str.trim();
+                case 'toLowerCase': return str.toLowerCase();
+                default: return str;
+            }
+        } catch (e) {
+            console.error('String operation error:', e);
+            return '';
+        }
+    }
+
+    function initSlugGeneration() {
+        const titleInput = getEl('title');
+        const slugContainer = getEl('slugContainer');
+        const slugDisplay = getEl('slugDisplay');
+        
+        if (!titleInput || !slugContainer || !slugDisplay) return;
+        
+        // Only auto-generate slug for new articles
+        if (!isEditing) {
+            titleInput.addEventListener('input', function() {
+                const title = safeString(this.value, 'trim');
+                
+                if (title.length > 0) {
+                    const slug = generateSlug(title);
+                    slugDisplay.textContent = slug;
+                    slugContainer.style.display = 'block';
+                } else {
+                    slugContainer.style.display = 'none';
+                }
+            });
+        }
+    }
+
+    function generateSlug(text) {
+        if (!text) return '';
+        
+        return safeString(text, 'toLowerCase')
+            .replace(/[^\w\s-]/g, '')
+            .replace(/[\s_-]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .substring(0, 100);
+    }
+
+    function initCharCounters() {
+        ['title', 'summary'].forEach(id => {
+            const element = getEl(id);
+            const counter = getEl(id + 'Counter');
+            
+            if (!element || !counter) return;
+            
+            element.addEventListener('input', function() {
+                updateCounter(element, counter);
+            });
+        });
+    }
+
+    function updateCounter(element, counter) {
+        const length = element.value.length;
+        const maxLength = element.getAttribute('maxlength') || 5000;
+        counter.textContent = length + (maxLength !== '5000' ? '/' + maxLength : ' karakter');
+        
+        if (length > maxLength * 0.9) {
+            counter.style.color = '#dc3545';
+        } else if (length > maxLength * 0.7) {
+            counter.style.color = '#ffc107';
+        } else {
+            counter.style.color = '#666';
+        }
+    }
+
+    function updateContentCounter() {
+        const contentCounter = getEl('contentCounter');
+        if (!contentCounter) return;
+        
+        const content = $('#content').summernote('code');
+        const textContent = $('<div>').html(content).text();
+        const length = textContent.length;
+        
+        contentCounter.textContent = length + ' karakter';
+        
+        if (length > 5000) {
+            contentCounter.style.color = '#dc3545';
+        } else if (length > 3000) {
+            contentCounter.style.color = '#ffc107';
+        } else {
+            contentCounter.style.color = '#666';
+        }
+    }
+
+    function updateAllCounters() {
+        ['title', 'summary'].forEach(id => {
+            const element = getEl(id);
+            const counter = getEl(id + 'Counter');
+            if (element && counter) {
+                updateCounter(element, counter);
+            }
+        });
+        updateContentCounter();
+    }
+
+    function initTagManagement() {
+        const tagInput = getEl('tagInput');
+        
+        if (!tagInput) return;
+        
+        tagInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                addTag();
+            }
+        });
+
+        tagInput.addEventListener('blur', function() {
+            if (this.value.trim()) {
+                addTag();
+            }
+        });
+
+        function addTag() {
+            const tagValue = safeString(tagInput.value, 'trim');
+            
+            if (!tagValue || tagValue.length === 0) return;
+            
+            const normalizedTag = safeString(tagValue, 'toLowerCase');
+            
+            if (tags.includes(normalizedTag)) {
+                showAlert('warning', 'Tag sudah ada');
+                tagInput.value = '';
+                return;
+            }
+            
+            if (tags.length >= 10) {
+                showAlert('warning', 'Maksimal 10 tag');
+                return;
+            }
+            
+            if (normalizedTag.length > 50) {
+                showAlert('warning', 'Tag maksimal 50 karakter');
+                return;
+            }
+            
+            tags.push(normalizedTag);
+            updateTagDisplay();
+            tagInput.value = '';
+        }
+    }
+
+    function updateTagDisplay() {
+        const tagDisplay = getEl('tagDisplay');
+        const tagsHidden = getEl('tagsHidden');
+        
+        if (!tagDisplay || !tagsHidden) return;
+        
+        if (tags.length === 0) {
+            tagDisplay.innerHTML = '<span class="text-muted">Tag akan muncul di sini</span>';
+        } else {
+            const tagHtml = tags.map((tag, index) => `
+                <span class="tag-item">
+                    ${tag}
+                    <button type="button" class="tag-remove" onclick="removeTag(${index})">×</button>
+                </span>
+            `).join('');
+            tagDisplay.innerHTML = tagHtml;
+        }
+        
+        const validTags = tags.filter(tag => tag && typeof tag === 'string' && tag.length > 0);
+        tagsHidden.value = validTags.join(',');
+    }
+
+    window.removeTag = function(index) {
+        if (index >= 0 && index < tags.length) {
+            tags.splice(index, 1);
+            updateTagDisplay();
+        }
+    };
+
+    function initDragDrop() {
+        const dropZone = getEl('dropZone');
+        const fileInput = getEl('image');
+        
+        if (!dropZone || !fileInput) return;
+
+        fileInput.addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        let dragCounter = 0;
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, function() {
+                dragCounter++;
+                dropZone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, function() {
+                dragCounter--;
+                if (dragCounter === 0) {
+                    dropZone.classList.remove('dragover');
+                }
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', function(e) {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }, false);
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                showAlert('error', 'File harus berupa gambar');
+                return;
+            }
+
+            if (file.size > 5 * 1024 * 1024) {
+                showAlert('error', 'Ukuran file maksimal 5MB');
+                return;
+            }
+
+            uploadFile(file);
+        }
+
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('csrf_token', getEl('uploadForm').querySelector('input[name="csrf_token"]').value);
+            
+            const actionValue = 'pending';
+            formData.append('action', actionValue);
+
+            const uploadProgress = getEl('uploadProgress');
+            const progressBar = getEl('progressBar');
+            
+            uploadProgress.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const percent = (e.loaded / e.total) * 100;
+                    progressBar.style.width = percent + '%';
+                    progressBar.textContent = Math.round(percent) + '%';
+                }
+            });
+
+            xhr.onload = function() {
+                uploadProgress.style.display = 'none';
+                
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.success) {
+                            handleUploadSuccess(response.data);
+                        } else {
+                            handleUploadError(response.message);
+                        }
+                    } catch (e) {
+                        handleUploadError('Server response error');
+                    }
+                } else {
+                    handleUploadError('Upload failed with status: ' + xhr.status);
+                }
+            };
+
+            xhr.onerror = function() {
+                uploadProgress.style.display = 'none';
+                handleUploadError('Network error');
+            };
+
+            xhr.open('POST', '/project/ajax/upload_handler.php');
+            xhr.send(formData);
+        }
+
+        function handleUploadSuccess(data) {
+            uploadedImageId = data.image_id;
+            getEl('featuredImageId').value = data.image_id;
+            
+            const uploadStatus = getEl('uploadStatus');
+            uploadStatus.className = 'upload-status success';
+            uploadStatus.textContent = 'Gambar berhasil diupload dan dioptimasi!';
+            uploadStatus.style.display = 'block';
+
+            getEl('uploadedThumbnail').src = data.url;
+            getEl('uploadedName').textContent = data.filename;
+            getEl('uploadedDetails').innerHTML = `${data.size} | ${data.dimensions}${data.optimized ? ' | <span class="text-success">Dioptimasi</span>' : ''}`;
+            getEl('uploadedInfo').style.display = 'block';
+
+            showAlert('success', 'Gambar berhasil diupload dan dioptimasi!');
+        }
+
+        function handleUploadError(message) {
+            const uploadStatus = getEl('uploadStatus');
+            uploadStatus.className = 'upload-status error';
+            uploadStatus.textContent = 'Upload gagal: ' + message;
+            uploadStatus.style.display = 'block';
+            showAlert('error', message);
+        }
+
+        window.removeImage = function() {
+            if (confirm('Hapus gambar?')) {
+                uploadedImageId = null;
+                getEl('featuredImageId').value = '';
+                getEl('uploadStatus').style.display = 'none';
+                getEl('uploadedInfo').style.display = 'none';
+                showAlert('info', 'Gambar telah dihapus');
+            }
+        };
+    }
+
+    function initFormSubmission() {
+        const form = getEl('uploadForm');
+        
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            submitArticle('publish');
+        });
+    }
+
+    window.saveDraft = function() {
+        submitArticle('draft');
+    };
+
+    function submitArticle(action) {
+        if (isSubmitting) {
+            console.log('Already submitting, please wait...');
+            return;
+        }
+        
+        if (!validateForm()) return;
+        
+        isSubmitting = true;
+        
+        const submitBtn = getEl('submitBtn');
+        const draftBtn = getEl('saveDraftBtn');
+        
+        const targetBtn = action === 'draft' ? draftBtn : submitBtn;
+        const originalText = targetBtn.innerHTML;
+        
+        targetBtn.disabled = true;
+        draftBtn.disabled = true;
+        submitBtn.disabled = true;
+        
+        targetBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>' + 
+            (action === 'draft' ? 'Menyimpan...' : 'Memproses...');
+
+        const formData = new FormData();
+        formData.append('csrf_token', getEl('uploadForm').querySelector('input[name="csrf_token"]').value);
+        formData.append('title', safeString(getEl('title').value, 'trim'));
+        formData.append('summary', safeString(getEl('summary').value, 'trim'));
+        formData.append('content', $('#content').summernote('code'));
+        formData.append('category', getEl('category').value);
+        formData.append('action', action);
+        
+        if (isEditing) {
+            formData.append('article_id', getEl('uploadForm').querySelector('input[name="article_id"]').value);
+        }
+        
+        const validTags = tags.filter(tag => tag && typeof tag === 'string' && tag.length > 0);
+        formData.append('tags', validTags.join(','));
+        formData.append('featured_image_id', uploadedImageId || '');
+
+        fetch('/project/ajax/submit_article.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.text())
+        .then(text => {
+            try {
+                const data = JSON.parse(text);
+                if (data.success) {
+                    showAlert('success', data.message);
+                    
+                    if (action === 'publish' && !isEditing) {
+                        setTimeout(() => {
+                            window.location.href = 'manage.php';
+                        }, 2000);
+                    } else if (action === 'draft') {
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else if (isEditing) {
+                        setTimeout(() => {
+                            window.location.href = 'manage.php';
+                        }, 2000);
+                    }
+                } else {
+                    showAlert('error', data.message);
+                    isSubmitting = false;
+                }
+            } catch (e) {
+                showAlert('error', 'Server response error');
+                isSubmitting = false;
+            }
+        })
+        .catch(error => {
+            showAlert('error', 'Network error occurred');
+            isSubmitting = false;
+        })
+        .finally(() => {
+            setTimeout(() => {
+                if (isSubmitting) {
+                    submitBtn.disabled = false;
+                    draftBtn.disabled = false;
+                    targetBtn.innerHTML = originalText;
+                }
+            }, 500);
+        });
+    }
+
+    function validateForm() {
+        let isValid = true;
+        
+        const requiredFields = ['title', 'summary', 'category'];
+        requiredFields.forEach(fieldId => {
+            const field = getEl(fieldId);
+            const value = safeString(field.value, 'trim');
+            
+            if (!value || value.length === 0) {
+                field.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                field.classList.remove('is-invalid');
+                field.classList.add('is-valid');
+            }
+        });
+
+        const content = $('#content').summernote('code');
+        const textContent = $('<div>').html(content).text().trim();
+        
+        if (!textContent || textContent.length === 0) {
+            $('#content').next('.note-editor').addClass('is-invalid');
+            isValid = false;
+        } else {
+            $('#content').next('.note-editor').removeClass('is-invalid').addClass('is-valid');
+        }
+
+        if (!isValid) {
+            showAlert('error', 'Mohon lengkapi semua field yang wajib diisi');
+        }
+
+        return isValid;
+    }
+
+    function showAlert(type, message) {
+        const alertContainer = getEl('alertContainer');
+        if (!alertContainer) return;
+        
+        const alertClass = type === 'success' ? 'alert-success' : 
+                         (type === 'warning' ? 'alert-warning' : 
+                         (type === 'info' ? 'alert-info' : 'alert-danger'));
+        const icon = type === 'success' ? 'check-circle' : 
+                   (type === 'warning' ? 'exclamation-triangle' : 
+                   (type === 'info' ? 'info-circle' : 'exclamation-triangle'));
+        
+        alertContainer.innerHTML = `
+            <div class="alert ${alertClass} alert-dismissible fade show">
+                <i class="fas fa-${icon} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+
+        setTimeout(() => {
+            const alert = alertContainer.querySelector('.alert');
+            if (alert) {
+                alert.remove();
+            }
+        }, 5000);
+    }
+
+    window.resetForm = function() {
+        if (confirm('Reset form? Semua perubahan akan hilang.')) {
+            getEl('uploadForm').reset();
+            $('#content').summernote('code', '');
+            tags = [];
+            getEl('tagDisplay').innerHTML = '<span class="text-muted">Tag akan muncul di sini</span>';
+            getEl('tagsHidden').value = '';
+            uploadedImageId = null;
+            getEl('featuredImageId').value = '';
+            getEl('slugContainer').style.display = 'none';
+            getEl('uploadStatus').style.display = 'none';
+            getEl('uploadedInfo').style.display = 'none';
+            updateAllCounters();
+            showAlert('info', 'Form telah direset');
+        }
+    };
+
+    console.log('✓ Upload page initialized successfully');
+    console.log('✓ Edit mode:', isEditing);
+});
+</script>
 
 <?php require_once 'footer.php'; ?>

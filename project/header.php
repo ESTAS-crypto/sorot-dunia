@@ -1,11 +1,16 @@
 <?php
 $baseUrl = 'https://inievan.my.id/project';
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
-// Include database configuration
+// Include database configuration and auth check
 require_once 'config/config.php';
+require_once 'config/auth_check.php';
+
+// Initialize visitor tracking for public pages only
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+    if (strpos($_SERVER['REQUEST_URI'], '/admin/') === false) {
+        initVisitorTracking($koneksi);
+    }
+}
 
 // Fetch user data if logged in
 $user = [];
@@ -21,23 +26,49 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_
     }
 }
 
-// Define $can_access_features (assumed from original code context)
-$can_access_features = true; // Ganti dengan logika aktual jika diperlukan
+// Menentukan halaman aktif untuk navigasi
+$current_page = basename($_SERVER['PHP_SELF'], '.php');
+$page_mapping = [
+    'index' => 'Home',
+    'berita' => 'Berita',
+    'artikel' => 'Berita',
+    'search' => 'Search'
+];
+
+$can_access_features = true;
+$siteInfo = getSiteInfo();
 ?>
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sorot Dunia</title>
-    <link rel="icon" href="/img/icon.webp" type="image/webp" />
+    <title><?php echo htmlspecialchars($siteInfo['name']); ?></title>
+    <meta name="description" content="<?php echo htmlspecialchars($siteInfo['description']); ?>">
+    <meta name="keywords" content="<?php echo htmlspecialchars($siteInfo['keywords']); ?>">
+    <meta name="robots" content="index, follow">
+    <link rel="icon" href="<?php echo $baseUrl; ?>/img/icon.webp" type="image/webp" />
+    <link rel="canonical" href="<?php echo (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://" . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']; ?>">
+    
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="style/berita.css">
-    <link rel="stylesheet" href="style/reactions.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="<?php echo $baseUrl; ?>/style/berita.css">
+    <link rel="stylesheet" href="<?php echo $baseUrl; ?>/style/modal.css">
+    
     <style>
+    /* Reset and base styles */
+    * {
+        box-sizing: border-box;
+    }
+
     a {
         text-decoration: none;
         color: #333;
@@ -47,11 +78,11 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
         overflow-y: auto;
         scroll-behavior: smooth;
         background-color: #f8f9fa;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     }
-
-    /* Add logged-in class if user is logged in */
+    
     body.logged-in {
-        /* Additional styles for logged-in users if needed */
+        /* Styles for logged in users */
     }
 
     /* Navigation */
@@ -59,6 +90,8 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
         background-color: #ffffff;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         padding: 10px 0;
+        position: relative;
+        z-index: 1000;
     }
 
     .navbar-content {
@@ -119,48 +152,119 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
         font-weight: 500;
     }
 
-    /* User Dropdown - PERBAIKAN UTAMA */
+    /* User Dropdown */
+    .user-dropdown {
+        position: relative;
+    }
+
+    .user-dropdown .dropdown {
+        position: relative;
+    }
+
     .user-dropdown .dropdown-toggle {
-        border: none !important;
+        border: 1px solid #6c757d !important;
         background: #6c757d !important;
         cursor: pointer !important;
         color: white !important;
         padding: 8px 20px !important;
         font-size: 14px !important;
         font-weight: 500 !important;
+        outline: none !important;
+        box-shadow: none !important;
+        border-radius: 0.375rem !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        text-decoration: none !important;
+        position: relative !important;
     }
 
-    .user-dropdown .dropdown-toggle:hover {
-        background-color: #e9ecef !important;
-        color: #333 !important;
-    }
-
-    .user-dropdown .dropdown-toggle:focus {
-        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
-        background-color: #6c757d !important;
-        color: white !important;
-    }
-
+    .user-dropdown .dropdown-toggle:hover,
+    .user-dropdown .dropdown-toggle:focus,
     .user-dropdown .dropdown-toggle:active,
     .user-dropdown .dropdown-toggle.show {
         background-color: #5a6268 !important;
-        color: white !important;
         border-color: #545b62 !important;
+        color: white !important;
+        outline: none !important;
+        box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25) !important;
+    }
+
+    .user-dropdown .dropdown-toggle::after {
+        margin-left: 0.5em !important;
+        border-top: 0.3em solid !important;
+        border-right: 0.3em solid transparent !important;
+        border-left: 0.3em solid transparent !important;
+        border-bottom: 0 !important;
     }
 
     .user-dropdown .dropdown-menu {
+        position: absolute !important;
+        top: 100% !important;
+        left: auto !important;
+        right: 0 !important;
+        z-index: 1000 !important;
+        display: none !important;
         min-width: 200px !important;
-        border: 1px solid #dee2e6 !important;
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+        padding: 0.5rem 0 !important;
+        margin: 0.125rem 0 0 !important;
+        font-size: 0.875rem !important;
+        color: #212529 !important;
+        text-align: left !important;
+        background-color: #fff !important;
+        background-clip: padding-box !important;
+        border: 1px solid rgba(0, 0, 0, 0.15) !important;
+        border-radius: 0.5rem !important;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175) !important;
     }
 
-    /* Mobile Toggle Button - PERBAIKAN */
+    .user-dropdown .dropdown-menu.show {
+        display: block !important;
+    }
+
+    .user-dropdown .dropdown-item {
+        display: flex !important;
+        width: 100% !important;
+        padding: 0.5rem 1rem !important;
+        clear: both !important;
+        font-weight: 400 !important;
+        color: #212529 !important;
+        text-align: inherit !important;
+        text-decoration: none !important;
+        white-space: nowrap !important;
+        background-color: transparent !important;
+        border: 0 !important;
+        align-items: center !important;
+        font-size: 14px !important;
+    }
+
+    .user-dropdown .dropdown-item:hover,
+    .user-dropdown .dropdown-item:focus {
+        color: #1e2125 !important;
+        background-color: #e9ecef !important;
+    }
+
+    .user-dropdown .dropdown-item i {
+        width: 16px !important;
+        text-align: center !important;
+        margin-right: 8px !important;
+    }
+
+    .user-dropdown .dropdown-divider {
+        height: 0 !important;
+        margin: 0.5rem 0 !important;
+        overflow: hidden !important;
+        border-top: 1px solid rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* Mobile Toggle Button */
     .navbar-toggler {
         margin-left: auto;
         border: 1px solid #dee2e6;
         padding: 4px 8px;
         background: transparent !important;
         border-radius: 0.375rem;
+        outline: none !important;
+        box-shadow: none !important;
     }
 
     .navbar-toggler:focus {
@@ -200,307 +304,127 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
         color: #333 !important;
     }
 
-    /* Carousel */
-    .carousel-item img {
-        height: 400px;
-        object-fit: cover;
-        width: 100%;
-        border-radius: 10px;
+    /* Password Strength Indicator */
+    .password-strength-meter {
+        margin-top: 8px;
+        height: 4px;
+        background-color: #e0e0e0;
+        border-radius: 2px;
+        overflow: hidden;
+        transition: all 0.3s ease;
     }
 
-    .carousel-caption {
-        background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
-        border-radius: 0 0 10px 10px;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        padding: 20px;
+    .password-strength-bar {
+        height: 100%;
+        width: 0%;
+        transition: all 0.3s ease;
     }
 
-    .carousel-caption h5 {
-        font-size: 18px;
-        font-weight: bold;
-        margin-bottom: 10px;
-    }
-
-    /* News Feed */
-    .news-feed {
-        background-color: #fff;
-        border-radius: 10px;
-        padding: 20px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    }
-
-    .news-item {
-        display: flex;
-        margin-bottom: 20px;
-        padding-bottom: 20px;
-        border-bottom: 1px solid #eee;
-    }
-
-    .news-item:last-child {
-        border-bottom: none;
-        margin-bottom: 0;
-    }
-
-    .news-image {
-        width: 120px;
-        height: 80px;
-        object-fit: cover;
-        border-radius: 8px;
-        margin-right: 15px;
-    }
-
-    .news-content h6 {
-        font-size: 14px;
-        font-weight: 600;
-        margin-bottom: 5px;
-        line-height: 1.4;
-    }
-
-    .news-meta {
-        font-size: 12px;
-        color: #666;
-        margin-bottom: 5px;
-    }
-
-    /* Sidebar */
-    .sidebar {
-        background-color: #fff;
-        border-radius: 10px;
-        padding: 20px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
-    }
-
-    .sidebar h5 {
-        color: #fffafa;
-        margin-bottom: 15px;
-        font-weight: bold;
-    }
-
-    .trending-item {
-        display: flex;
-        flex-wrap: wrap;
-        margin-bottom: 15px;
-        align-items: flex-start;
-    }
-
-    .trending-number {
-        background-color: #333;
-        color: #fff;
-        width: 25px;
-        height: 25px;
+    .password-strength-text {
+        margin-top: 8px;
+        font-size: 13px;
+        font-weight: 500;
         display: flex;
         align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        border-radius: 50%;
-        margin-right: 10px;
-        font-size: 14px;
+        gap: 6px;
     }
 
-    .trending-content {
+    .strength-weak .password-strength-bar {
+        width: 33.33%;
+        background: linear-gradient(90deg, #ef4444, #dc2626);
+    }
+
+    .strength-weak .password-strength-text {
+        color: #ef4444;
+    }
+
+    .strength-medium .password-strength-bar {
+        width: 66.66%;
+        background: linear-gradient(90deg, #f59e0b, #d97706);
+    }
+
+    .strength-medium .password-strength-text {
+        color: #f59e0b;
+    }
+
+    .strength-strong .password-strength-bar {
+        width: 100%;
+        background: linear-gradient(90deg, #10b981, #059669);
+    }
+
+    .strength-strong .password-strength-text {
+        color: #10b981;
+    }
+
+    .password-requirements {
+        margin-top: 10px;
+        padding: 12px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border-left: 3px solid #667eea;
+    }
+
+    .password-requirements h6 {
         font-size: 13px;
-        font-weight: bold;
-        flex: 1;
-        word-break: break-word;
-        overflow: hidden;
-        text-overflow: ellipsis;
-
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #495057;
     }
 
-    /* Footer */
-    .footer {
-        background-color: #333;
-        color: #fff;
-        padding: 40px 0 20px;
-        margin-top: 40px;
-    }
-
-    .footer h5 {
-        color: #fff;
-        margin-bottom: 20px;
-        font-weight: bold;
-    }
-
-    .footer p {
-        color: #ccc;
-        margin-bottom: 10px;
-    }
-
-    .footer ul {
+    .password-requirements ul {
         list-style: none;
         padding: 0;
+        margin: 0;
     }
 
-    .footer ul li {
-        margin-bottom: 8px;
-    }
-
-    .footer ul li a {
-        color: #ccc;
-        text-decoration: none;
-        transition: color 0.3s ease;
-    }
-
-    .footer ul li a:hover {
-        color: #fff;
-    }
-
-    .social-icons {
-        display: flex;
-        gap: 15px;
-        justify-content: center;
-        align-items: center;
-        margin: 20px 0;
-    }
-
-    .social-icons a {
-        color: #fff;
-        font-size: 24px;
-        transition: all 0.3s ease;
-        text-decoration: none;
-        width: 40px;
-        height: 40px;
+    .password-requirements li {
+        font-size: 12px;
+        padding: 4px 0;
+        color: #6c757d;
         display: flex;
         align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        background-color: rgba(255, 255, 255, 0.1);
+        gap: 8px;
+        transition: all 0.2s ease;
     }
 
-    .social-icons a:hover {
-        background-color: rgba(255, 255, 255, 0.2);
-        transform: translateY(-2px);
-    }
-
-    .footer-bottom {
-        border-top: 1px solid #555;
-        padding-top: 20px;
-        margin-top: 30px;
-        text-align: center;
-    }
-
-    .footer-bottom p {
-        margin: 5px 0;
+    .password-requirements li i {
         font-size: 14px;
+        width: 16px;
     }
 
-    /* Ban/Warning Notification Styles */
-    .notification-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.8);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 9999;
-        backdrop-filter: blur(5px);
+    .password-requirements li.valid {
+        color: #10b981;
     }
 
-    .notification-box {
-        background-color: #2d2d2d;
-        border: 2px solid #dc3545;
-        border-radius: 12px;
-        padding: 30px;
-        max-width: 500px;
-        max-height: 80vh;
-        overflow-y: auto;
-        text-align: center;
-        color: #ffffff;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        animation: slideInScale 0.4s ease-out;
+    .password-requirements li.valid i {
+        color: #10b981;
     }
 
-    .notification-box.warning {
-        border-color: #ffc107;
+    .password-requirements li.invalid {
+        color: #6c757d;
     }
 
-    .notification-icon {
-        font-size: 48px;
-        margin-bottom: 20px;
-        animation: pulse 2s infinite;
-    }
-
-    .notification-icon.ban {
+    .password-requirements li.invalid i {
         color: #dc3545;
     }
 
-    .notification-icon.warning {
-        color: #ffc107;
-    }
-
-    .notification-title {
-        font-size: 24px;
-        font-weight: bold;
-        margin-bottom: 15px;
-    }
-
-    .notification-message {
-        font-size: 16px;
-        line-height: 1.5;
-        margin-bottom: 20px;
-        text-align: left;
-    }
-
-    .notification-message hr {
-        border-color: #555;
-        margin: 15px 0;
-    }
-
-    .notification-actions {
+    /* Password mismatch alert */
+    .password-mismatch {
+        color: #dc3545;
+        font-size: 12px;
+        margin-top: 6px;
         display: flex;
-        gap: 10px;
-        justify-content: center;
-        flex-wrap: wrap;
-    }
-
-    .btn-understand {
-        background-color: #6c757d;
-        color: #ffffff;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-weight: 500;
-        display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
     }
 
-    .btn-understand:hover {
-        background-color: #5a6268;
-        transform: translateY(-1px);
-    }
-
-    /* Animations */
-    @keyframes slideInScale {
-        from {
-            opacity: 0;
-            transform: scale(0.8) translateY(-20px);
-        }
-
-        to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-        }
-    }
-
-    @keyframes pulse {
-
-        0%,
-        100% {
-            transform: scale(1);
-        }
-
-        50% {
-            transform: scale(1.1);
-        }
+    .password-match {
+        color: #10b981;
+        font-size: 12px;
+        margin-top: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }
 
     /* Responsive Design */
@@ -508,20 +432,6 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
         .navbar-content {
             flex-wrap: wrap;
             justify-content: space-between;
-        }
-
-        .trending-number {
-            width: 20px;
-            height: 20px;
-            font-size: 12px;
-        }
-
-        .sidebar {
-            padding: 15px;
-        }
-
-        .trending-content {
-            font-size: 12px;
         }
 
         .brand-logo {
@@ -552,16 +462,6 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
             text-align: center;
         }
 
-        .carousel-item img {
-            height: 200px;
-        }
-
-        .news-image {
-            width: 80px;
-            height: 60px;
-        }
-
-        /* Mobile navbar fix - PERBAIKAN UTAMA */
         .navbar-collapse {
             background-color: #fff !important;
             border-top: 1px solid #dee2e6 !important;
@@ -569,100 +469,50 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
             padding: 10px 0 !important;
             border-radius: 0.375rem !important;
         }
-
-        .navbar-nav .dropdown-menu {
-            position: static !important;
-            float: none !important;
-            width: 100% !important;
-            margin-top: 0 !important;
-            background-color: #f8f9fa !important;
-            border: none !important;
-            box-shadow: none !important;
-        }
-
-        .notification-box {
-            margin: 20px;
-            padding: 20px;
-            max-width: none;
-        }
-
-        .notification-title {
-            font-size: 20px;
-        }
-
-        .notification-message {
-            font-size: 14px;
-        }
-
-        .notification-icon {
-            font-size: 36px;
-        }
     }
 
-    @media (min-width: 768px) and (max-width: 991px) {
-        .search-form {
-            max-width: 300px;
-        }
-    }
-
-    @media (min-width: 992px) and (max-width: 1199px) {
-        .search-form {
-            max-width: 350px;
-        }
-    }
-
-    @media (min-width: 1200px) and (max-width: 1399px) {
-        .search-form {
-            max-width: 400px;
-        }
-    }
-
-    @media (min-width: 1400px) {
-        .search-form {
-            max-width: 450px;
-        }
-
-        .carousel-item img {
-            height: 450px;
-        }
-    }
-
-    @keyframes slideInRight {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-
-    .new-article-alert {
-        backdrop-filter: blur(10px);
-        background-color: rgba(255, 255, 255, 0.95) !important;
-    }
-
-    .new-article-alert:hover {
-        transform: translateY(-2px);
-        transition: transform 0.2s ease;
-    }
-
-    /* Responsive untuk mobile */
-    @media (max-width: 768px) {
-        .new-article-alert {
-            top: 10px !important;
-            right: 10px !important;
-            left: 10px !important;
-            min-width: auto !important;
-            max-width: none !important;
+    @media (min-width: 992px) {
+        .login-container {
+            justify-content: flex-start;
+            padding-left: 8%;
         }
     }
     </style>
 </head>
-
-<body <?php echo $is_logged_in ? 'class="logged-in"' : ''; ?>>
+<body <?php echo $is_logged_in ? 'class="logged-in" data-user-id="' . htmlspecialchars($user['id'] ?? '') . '"' : ''; ?>>
+    
+    <!-- Error Suppression -->
+    <script>
+    (function() {
+        'use strict';
+        const suppressedPatterns = [
+            'Could not establish connection',
+            'Extension context invalidated',
+            'chrome-extension'
+        ];
+        function shouldSuppress(message) {
+            return suppressedPatterns.some(pattern => 
+                message && message.toLowerCase().includes(pattern.toLowerCase())
+            );
+        }
+        window.addEventListener('error', function(event) {
+            if (shouldSuppress(event.message || '')) {
+                console.log('Extension error suppressed');
+                event.preventDefault();
+                return false;
+            }
+        }, true);
+        window.addEventListener('unhandledrejection', function(event) {
+            const message = (event.reason && event.reason.message) || '';
+            if (shouldSuppress(message.toString())) {
+                console.log('Extension promise rejection suppressed');
+                event.preventDefault();
+                return false;
+            }
+        }, true);
+    })();
+    </script>
+    
     <!-- Main Navigation -->
     <nav class="navbar navbar-expand-lg top-nav">
         <div class="container">
@@ -670,20 +520,19 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
                 <!-- Brand Logo -->
                 <div>
                     <a class="brand-logo" href="<?php echo $baseUrl; ?>">
-                        <img src="<?php echo $baseUrl; ?>/img/NewLogo.webp" alt="Sorot Dunia Logo">
+                        <img src="<?php echo $baseUrl; ?>/img/NewLogo.webp" alt="<?php echo htmlspecialchars($siteInfo['name']); ?>" loading="lazy">
                     </a>
                 </div>
 
                 <!-- Mobile Toggle Button -->
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
-                    aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
                     <span class="navbar-toggler-icon"></span>
                 </button>
 
                 <!-- Search Form -->
-                <form class="search-form" role="search">
+                <form class="search-form" role="search" method="GET" action="<?php echo $baseUrl; ?>/search.php">
                     <div class="input-group">
-                        <input class="form-control" type="search" placeholder="Cari Berita Terbaru" aria-label="Search">
+                        <input class="form-control" type="search" name="q" placeholder="Cari Berita..." aria-label="Search" value="<?php echo htmlspecialchars($_GET['q'] ?? ''); ?>">
                         <button class="btn btn-outline-secondary" type="submit">
                             <i class="fas fa-search"></i>
                         </button>
@@ -693,21 +542,21 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
                 <!-- Desktop Auth Navigation -->
                 <div class="auth-buttons d-none d-lg-flex align-items-center">
                     <?php if (!$is_logged_in): ?>
-                    <a href="<?php echo $baseUrl; ?>/login.php" class="btn btn-outline-primary">Masuk</a>
-                    <a href="register.php" class="btn btn-outline-primary">Daftar</a>
+                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#loginModal">Masuk</button>
+                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#registerModal">Daftar</button>
                     <?php else: ?>
                     <div class="user-dropdown">
                         <div class="dropdown">
-                            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="userDropdown"
+                            <button class="btn btn-secondary dropdown-toggle" type="button" id="userDropdown"
                                 data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fas fa-user me-1"></i>
                                 <?php echo htmlspecialchars($user['username'] ?? 'User'); ?>
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                                <?php if (isset($user['role']) && in_array($user['role'], ['admin'])): ?>
+                                <?php if (isset($user['role']) && $user['role'] === 'admin'): ?>
                                 <li>
                                     <a class="dropdown-item" href="<?php echo $baseUrl; ?>/admin/index.php">
-                                        <i class="fas fa-check-circle me-2"></i> Admin Dashboard
+                                        <i class="fas fa-check-circle"></i> Admin Dashboard
                                     </a>
                                 </li>
                                 <?php endif; ?>
@@ -715,16 +564,23 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
                                 <?php if (isset($user['role']) && in_array($user['role'], ['admin', 'penulis'])): ?>
                                 <li>
                                     <a class="dropdown-item" href="<?php echo $baseUrl; ?>/Uplod_berita/uplod.php">
-                                        <i class="fas fa-upload me-2"></i> Upload Berita
+                                        <i class="fas fa-upload"></i> Upload Berita
                                     </a>
                                 </li>
                                 <?php endif; ?>
-
+                                
                                 <li>
-                                    <hr class="dropdown-divider">
+                                    <a class="dropdown-item" href="<?php echo $baseUrl; ?>/profile/profile.php">
+                                        <i class="fas fa-user-circle"></i> Profile
+                                    </a>
                                 </li>
-                                <li><a class="dropdown-item" href="logout.php"><i class="fas fa-sign-out-alt me-2"></i>
-                                        Logout</a></li>
+                                
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="<?php echo $baseUrl; ?>/logout.php">
+                                        <i class="fas fa-sign-out-alt"></i> Logout
+                                    </a>
+                                </li>
                             </ul>
                         </div>
                     </div>
@@ -732,14 +588,13 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
                 </div>
             </div>
 
-            <!-- Collapsible Content -->
+            <!-- Mobile Menu -->
             <div class="collapse navbar-collapse" id="navbarContent">
-                <!-- Mobile Menu Navigation -->
                 <ul class="navbar-nav w-100 d-lg-none">
                     <?php if (!$is_logged_in): ?>
                     <li class="nav-item d-flex gap-2 p-2">
-                        <a href="<?php echo $baseUrl; ?>/login.php" class="btn btn-outline-primary flex-fill">MASUK</a>
-                        <a href="register.php" class="btn btn-outline-primary flex-fill">DAFTAR</a>
+                        <button type="button" class="btn btn-outline-primary flex-fill" data-bs-toggle="modal" data-bs-target="#loginModal">MASUK</button>
+                        <button type="button" class="btn btn-outline-primary flex-fill" data-bs-toggle="modal" data-bs-target="#registerModal">DAFTAR</button>
                     </li>
                     <?php else: ?>
                     <li class="nav-item p-2">
@@ -749,7 +604,7 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
                         </div>
                     </li>
 
-                    <?php if (isset($user['role']) && strtolower($user['role']) === 'admin'): ?>
+                    <?php if (isset($user['role']) && $user['role'] === 'admin'): ?>
                     <li class="nav-item p-2">
                         <a class="nav-link" href="<?php echo $baseUrl; ?>/admin/index.php">
                             <i class="fas fa-check-circle me-2"></i> Admin Dashboard
@@ -764,75 +619,19 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
                         </a>
                     </li>
                     <?php endif; ?>
-
+                    
                     <li class="nav-item p-2">
-                        <a class="nav-link" href="logout.php"><i class="fas fa-sign-out-alt me-2"></i> Logout</a>
+                        <a class="nav-link" href="<?php echo $baseUrl; ?>/profile/profile.php">
+                            <i class="fas fa-user-circle me-2"></i> Profile
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item p-2">
+                        <a class="nav-link" href="<?php echo $baseUrl; ?>/logout.php">
+                            <i class="fas fa-sign-out-alt me-2"></i> Logout
+                        </a>
                     </li>
                     <?php endif; ?>
-
-                    <!-- Menu Items -->
-                    <li class="nav-item"><a class="nav-link" href="<?php echo $baseUrl; ?>">Home</a></li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button"
-                            data-bs-toggle="dropdown">Nasional</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">Politik</a></li>
-                            <li><a class="dropdown-item" href="#">Hukum dan Kriminal</a></li>
-                            <li><a class="dropdown-item" href="#">Info Politik</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button"
-                            data-bs-toggle="dropdown">Internasional</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">ASEAN</a></li>
-                            <li><a class="dropdown-item" href="#">ASEAN Pasifik</a></li>
-                            <li><a class="dropdown-item" href="#">Timur Tengah</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Ekonomi</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">Keuangan</a></li>
-                            <li><a class="dropdown-item" href="#">Energi</a></li>
-                            <li><a class="dropdown-item" href="#">Bisnis</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button"
-                            data-bs-toggle="dropdown">Olahraga</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">Sepak Bola</a></li>
-                            <li><a class="dropdown-item" href="#">Motor GP</a></li>
-                            <li><a class="dropdown-item" href="#">F1</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button"
-                            data-bs-toggle="dropdown">Otomotif</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">Motor listrik</a></li>
-                            <li><a class="dropdown-item" href="#">Mobil china</a></li>
-                            <li><a class="dropdown-item" href="#">Mobil air</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Hiburan</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">Film</a></li>
-                            <li><a class="dropdown-item" href="#">Musik</a></li>
-                            <li><a class="dropdown-item" href="#">Selebriti</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Gaya
-                            Hidup</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">Kesehatan</a></li>
-                            <li><a class="dropdown-item" href="#">Fashion</a></li>
-                            <li><a class="dropdown-item" href="#">Travel</a></li>
-                        </ul>
-                    </li>
                 </ul>
             </div>
         </div>
@@ -844,66 +643,20 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
             <nav class="category-nav">
                 <ul class="navbar-nav d-flex flex-row justify-content-center">
                     <li class="nav-item">
-                        <a class="nav-link active m-2" href="<?php echo $baseUrl; ?>">Home</a>
+                        <a class="nav-link <?php echo ($current_page == 'index') ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link m-2" href="berita.php">Berita</a>
+                        <a class="nav-link <?php echo (in_array($current_page, ['berita', 'artikel'])) ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>/berita.php">Berita</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link m-2" href="#">Nasional</a>
                     </li>
                     <li class="nav-item dropdown d-none d-md-block">
-                        <a class="nav-link dropdown-toggle m-2" href="#" role="button"
-                            data-bs-toggle="dropdown">Internasional</a>
+                        <a class="nav-link dropdown-toggle m-2" href="#" role="button" data-bs-toggle="dropdown">Internasional</a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="#">ASEAN</a></li>
                             <li><a class="dropdown-item" href="#">ASEAN Pasifik</a></li>
                             <li><a class="dropdown-item" href="#">Timur Tengah</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown d-none d-md-block">
-                        <a class="nav-link dropdown-toggle m-2" href="#" role="button"
-                            data-bs-toggle="dropdown">Ekonomi</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">Keuangan</a></li>
-                            <li><a class="dropdown-item" href="#">Energi</a></li>
-                            <li><a class="dropdown-item" href="#">Bisnis</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown d-none d-md-block">
-                        <a class="nav-link dropdown-toggle m-2" href="#" role="button"
-                            data-bs-toggle="dropdown">Olahraga</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">Sepak Bola</a></li>
-                            <li><a class="dropdown-item" href="#">Motor GP</a></li>
-                            <li><a class="dropdown-item" href="#">F1</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown d-none d-md-block">
-                        <a class="nav-link dropdown-toggle m-2" href="#" role="button"
-                            data-bs-toggle="dropdown">Otomotif</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">Motor listrik</a></li>
-                            <li><a class="dropdown-item" href="#">Mobil china</a></li>
-                            <li><a class="dropdown-item" href="#">Mobil air</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown d-none d-md-block">
-                        <a class="nav-link dropdown-toggle m-2" href="#" role="button"
-                            data-bs-toggle="dropdown">Hiburan</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">Film</a></li>
-                            <li><a class="dropdown-item" href="#">Musik</a></li>
-                            <li><a class="dropdown-item" href="#">Selebriti</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown d-none d-md-block">
-                        <a class="nav-link dropdown-toggle m-2" href="#" role="button" data-bs-toggle="dropdown">Gaya
-                            Hidup</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">Kesehatan</a></li>
-                            <li><a class="dropdown-item" href="#">Fashion</a></li>
-                            <li><a class="dropdown-item" href="#">Travel</a></li>
                         </ul>
                     </li>
                 </ul>
@@ -911,102 +664,179 @@ $can_access_features = true; // Ganti dengan logika aktual jika diperlukan
         </div>
     </div>
 
-    <!-- Bootstrap JS - PENTING: Letakkan sebelum closing body -->
+    <!-- Login Modal -->
+    <div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loginModalLabel"><i class="fas fa-sign-in-alt me-2"></i>Masuk ke Akun</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="loginAlert" class="alert d-none" role="alert"></div>
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label for="loginUsername" class="form-label">Username atau Email</label>
+                            <input type="text" class="form-control" id="loginUsername" name="email" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="loginPassword" class="form-label">Password</label>
+                            <div class="password-container">
+                                <input type="password" class="form-control" id="loginPassword" name="password" required>
+                                <button type="button" class="password-toggle" onclick="togglePassword('loginPassword')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-sign-in-alt me-2"></i>Masuk
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <div class="w-100 text-center">
+                        <p class="mb-0">Belum punya akun? <a href="#" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#registerModal">Daftar disini</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div class="modal fade" id="registerModal" tabindex="-1" aria-labelledby="registerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="registerModalLabel"><i class="fas fa-user-plus me-2"></i>Daftar Akun Baru</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="registerAlert" class="alert d-none" role="alert"></div>
+                    <form id="registerForm">
+                        <div class="mb-3">
+                            <label for="registerUsername" class="form-label">Username <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="registerUsername" name="username" required 
+                                   minlength="3" maxlength="50" pattern="[a-zA-Z0-9_]+"
+                                   title="Username hanya boleh mengandung huruf, angka, dan underscore">
+                            <small class="text-muted">3-50 karakter, hanya huruf, angka, dan underscore</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="registerFullName" class="form-label">Nama Lengkap <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="registerFullName" name="full_name" required
+                                   minlength="3" maxlength="100">
+                            <small class="text-muted">Minimal 3 karakter</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="registerEmail" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="registerEmail" name="email" required>
+                            <small class="text-muted">Email valid yang dapat digunakan untuk login</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="registerPassword" class="form-label">Password <span class="text-danger">*</span></label>
+                            <div class="password-container">
+                                <input type="password" class="form-control" id="registerPassword" name="password" required
+                                       minlength="8" maxlength="100">
+                                <button type="button" class="password-toggle" onclick="togglePassword('registerPassword')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <!-- Password Strength Indicator -->
+                            <div class="password-strength-meter" id="strengthMeter">
+                                <div class="password-strength-bar" id="strengthBar"></div>
+                            </div>
+                            <div class="password-strength-text" id="strengthText"></div>
+                            
+                            <!-- Password Requirements -->
+                            <div class="password-requirements">
+                                <h6><i class="fas fa-shield-alt me-1"></i>Persyaratan Password:</h6>
+                                <ul id="passwordRequirements">
+                                    <li id="req-length" class="invalid">
+                                        <i class="fas fa-times-circle"></i>
+                                        <span>Minimal 8 karakter</span>
+                                    </li>
+                                    <li id="req-uppercase" class="invalid">
+                                        <i class="fas fa-times-circle"></i>
+                                        <span>Minimal 1 huruf besar (A-Z)</span>
+                                    </li>
+                                    <li id="req-lowercase" class="invalid">
+                                        <i class="fas fa-times-circle"></i>
+                                        <span>Minimal 1 huruf kecil (a-z)</span>
+                                    </li>
+                                    <li id="req-number" class="invalid">
+                                        <i class="fas fa-times-circle"></i>
+                                        <span>Minimal 1 angka (0-9)</span>
+                                    </li>
+                                    <li id="req-special" class="invalid">
+                                        <i class="fas fa-times-circle"></i>
+                                        <span>Minimal 1 karakter spesial (!@#$%^&*)</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="registerConfirmPassword" class="form-label">Konfirmasi Password <span class="text-danger">*</span></label>
+                            <div class="password-container">
+                                <input type="password" class="form-control" id="registerConfirmPassword" name="confirm_password" required
+                                       minlength="8" maxlength="100">
+                                <button type="button" class="password-toggle" onclick="togglePassword('registerConfirmPassword')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div id="passwordMatchMessage"></div>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary" id="registerSubmitBtn" disabled>
+                                <i class="fas fa-user-plus me-2"></i>Daftar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <div class="w-100 text-center">
+                        <p class="mb-0">Sudah punya akun? <a href="#" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#loginModal">Masuk disini</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Ban Notification System - ONLY for logged in users -->
+    <script>
     <?php if ($is_logged_in): ?>
-    <script src="js/notif-ban.js"></script>
+    window.userData = {
+        id: <?php echo json_encode(intval($user['id'] ?? 0)); ?>,
+        username: <?php echo json_encode($user['username'] ?? ''); ?>,
+        role: <?php echo json_encode($user['role'] ?? ''); ?>,
+        isLoggedIn: true
+    };
+    <?php else: ?>
+    window.userData = { isLoggedIn: false };
     <?php endif; ?>
 
-    <!-- PERBAIKAN JAVASCRIPT - FOKUS MOBILE NAVBAR CLOSE -->
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-
-        // Initialize semua dropdown dengan proper Bootstrap
-        var dropdownElementList = [].slice.call(document.querySelectorAll('.dropdown-toggle'));
-        var dropdownList = dropdownElementList.map(function(dropdownToggleEl) {
-            return new bootstrap.Dropdown(dropdownToggleEl);
-        });
-
-        // PERBAIKAN UTAMA MOBILE: Auto close navbar mobile
-        var navLinks = document.querySelectorAll('.navbar-nav .nav-link:not(.dropdown-toggle)');
-        var navbarCollapse = document.querySelector('#navbarContent');
-        var navbarToggler = document.querySelector('.navbar-toggler');
-
-        // Close mobile navbar ketika klik menu item
-        navLinks.forEach(function(link) {
-            link.addEventListener('click', function(e) {
-                if (navbarCollapse && navbarCollapse.classList.contains('show')) {
-                    var bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse) ||
-                        new bootstrap.Collapse(navbarCollapse);
-                    bsCollapse.hide();
-                }
-            });
-        });
-
-        // PERBAIKAN UTAMA: Close mobile navbar ketika klik di luar
-        document.addEventListener('click', function(event) {
-            var isClickInsideNavbar = document.querySelector('.navbar').contains(event.target);
-
-            if (!isClickInsideNavbar && navbarCollapse && navbarCollapse.classList.contains('show')) {
-                console.log('Clicked outside navbar, closing menu');
-                var bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse) || new bootstrap
-                    .Collapse(navbarCollapse);
-                bsCollapse.hide();
-            }
-        });
-
-        // PERBAIKAN: Close mobile navbar ketika klik dropdown item di mobile
-        document.querySelectorAll('.navbar-collapse .dropdown-item').forEach(function(item) {
-            item.addEventListener('click', function() {
-                console.log('Dropdown item clicked');
-                if (navbarCollapse && navbarCollapse.classList.contains('show')) {
-                    setTimeout(function() {
-                        var bsCollapse = bootstrap.Collapse.getInstance(
-                            navbarCollapse) || new bootstrap.Collapse(
-                            navbarCollapse);
-                        bsCollapse.hide();
-                    }, 100);
-                }
-            });
-        });
-
-        // Fix user dropdown desktop
-        var userDropdown = document.querySelector('#userDropdown');
-        if (userDropdown) {
-            userDropdown.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                var dropdownInstance = bootstrap.Dropdown.getOrCreateInstance(userDropdown);
-                dropdownInstance.toggle();
-            });
+    // Password toggle function
+    function togglePassword(inputId) {
+        const input = document.getElementById(inputId);
+        const icon = event.currentTarget.querySelector('i');
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
         }
-
-        // TAMBAHAN: Force close dengan tombol toggle
-        if (navbarToggler && navbarCollapse) {
-            navbarToggler.addEventListener('click', function() {
-                // Jika sudah terbuka, pastikan bisa tertutup
-                if (navbarCollapse.classList.contains('show')) {
-                    setTimeout(function() {
-                        var bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse) ||
-                            new bootstrap.Collapse(navbarCollapse);
-                        bsCollapse.hide();
-                    }, 50);
-                }
-            });
-        }
-
-        // TAMBAHAN: Close dengan ESC key
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && navbarCollapse && navbarCollapse.classList.contains('show')) {
-                console.log('ESC pressed, closing navbar');
-                var bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse) || new bootstrap
-                    .Collapse(navbarCollapse);
-                bsCollapse.hide();
-            }
-        });
-
-    });
+    }
     </script>
+</body>
+</html>

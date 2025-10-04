@@ -1,0 +1,27 @@
+[20-Sep-2025 08:04:14   UTC] PHP Warning:  require_once(../config/image_config.php): Failed to open stream: No such file or directory in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php on line 5
+[20-Sep-2025 08:04:14 UTC] PHP Fatal error:  Uncaught Error: Failed opening required '../config/image_config.php' (include_path='.:/opt/cpanel/ea-php81/root/usr/share/pear') in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php:5
+Stack trace:
+#0 {main}
+  thrown in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php on line 5
+[20-Sep-2025 08:05:09 UTC] SECURITY_EVENT: {"timestamp":"2025-09-20 08:05:09","event_type":"rate_limit_exceeded","user_id":4,"username":"evan123","ip_address":"180.241.217.48","user_agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/140.0.0.0 Safari\/537.36","details":"Too many login attempts","script":"\/project\/ajax\/upload_handler.php"}
+[20-Sep-2025 08:05:09 UTC] PHP Warning:  require_once(../config/image_config.php): Failed to open stream: No such file or directory in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php on line 5
+[20-Sep-2025 08:05:09 UTC] PHP Fatal error:  Uncaught Error: Failed opening required '../config/image_config.php' (include_path='.:/opt/cpanel/ea-php81/root/usr/share/pear') in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php:5
+Stack trace:
+#0 {main}
+  thrown in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php on line 5
+[20-Sep-2025 08:05:53 UTC] SECURITY_EVENT: {"timestamp":"2025-09-20 08:05:53","event_type":"rate_limit_exceeded","user_id":4,"username":"evan123","ip_address":"180.241.217.48","user_agent":"Mozilla\/5.0 (Linux; Android 6.0; Nexus 5 Build\/MRA58N) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/140.0.0.0 Mobile Safari\/537.36","details":"Too many login attempts","script":"\/project\/ajax\/upload_handler.php"}
+[20-Sep-2025 08:05:53 UTC] PHP Warning:  require_once(../config/image_config.php): Failed to open stream: No such file or directory in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php on line 5
+[20-Sep-2025 08:05:53 UTC] PHP Fatal error:  Uncaught Error: Failed opening required '../config/image_config.php' (include_path='.:/opt/cpanel/ea-php81/root/usr/share/pear') in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php:5
+Stack trace:
+#0 {main}
+  thrown in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php on line 5
+[20-Sep-2025 08:45:08 UTC] PHP Warning:  require_once(config.php): Failed to open stream: No such file or directory in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php on line 21
+[20-Sep-2025 08:45:08 UTC] PHP Fatal error:  Uncaught Error: Failed opening required 'config.php' (include_path='.:/opt/cpanel/ea-php81/root/usr/share/pear') in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php:21
+Stack trace:
+#0 {main}
+  thrown in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php on line 21
+[20-Sep-2025 10:21:33 UTC] PHP Warning:  require_once(../config/image_config.php): Failed to open stream: No such file or directory in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php on line 5
+[20-Sep-2025 10:21:33 UTC] PHP Fatal error:  Uncaught Error: Failed opening required '../config/image_config.php' (include_path='.:/opt/cpanel/ea-php81/root/usr/share/pear') in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php:5
+Stack trace:
+#0 {main}
+  thrown in /home/arinnapr/inievan.my.id/project/ajax/upload_handler.php on line 5

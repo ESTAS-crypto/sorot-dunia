@@ -1,5 +1,5 @@
 <?php
-// auth_check.php - FIXED VERSION
+// auth_check.php - FIXED VERSION untuk halaman publik
 
 // Mulai session jika belum dimulai
 if (session_status() === PHP_SESSION_NONE) {
@@ -37,11 +37,11 @@ function logout() {
     
     // Redirect to login dengan JavaScript fallback
     if (canSendHeaders()) {
-        header("Location: ../login.php?logout=success");
+        header("Location: ../project/login.php?logout=success");
         exit();
     } else {
         // JavaScript fallback jika headers sudah dikirim
-        echo '<script>window.location.href = "../login.php?logout=success";</script>';
+        echo '<script>window.location.href = "../project/login.php?logout=success";</script>';
         exit();
     }
 }
@@ -119,10 +119,10 @@ function checkSessionTimeout($timeout = 1800) { // Default 30 minutes
         session_destroy();
         
         if (canSendHeaders()) {
-            header("Location: ../login.php?error=session_timeout");
+            header("Location: ../project/login.php?error=session_timeout");
             exit();
         } else {
-            echo '<script>window.location.href = "../login.php?error=session_timeout";</script>';
+            echo '<script>window.location.href = "../project/login.php?error=session_timeout";</script>';
             exit();
         }
     }
@@ -156,7 +156,60 @@ function logUserActivity($action, $details = '') {
     }
 }
 
-// PERBAIKAN UTAMA: Cek apakah ini adalah file debug/utility
+// PERBAIKAN UTAMA: Tentukan halaman mana yang butuh login dan yang tidak
+function isPublicPage() {
+    $current_script = basename($_SERVER['SCRIPT_NAME']);
+    
+    // Halaman yang TIDAK memerlukan login
+    $public_pages = [
+        'index.php',           // Homepage
+        'berita.php',          // Berita list
+        'artikel.php',         // Detail artikel
+        'search.php',          // Pencarian
+        'kategori.php',        // Kategori
+        'header.php',          // Header file
+        'footer.php',          // Footer file
+        'config.php'           // Config file
+    ];
+    
+    return in_array($current_script, $public_pages);
+}
+
+// Function untuk cek halaman yang membutuhkan login
+function requiresLogin() {
+    $current_script = basename($_SERVER['SCRIPT_NAME']);
+    
+    // Halaman yang WAJIB login
+    $login_required_pages = [
+        'profile.php',
+        'edit_profile.php',
+        'change_password.php',
+        'user_dashboard.php'
+    ];
+    
+    return in_array($current_script, $login_required_pages);
+}
+
+// Function untuk cek halaman admin only
+function isAdminOnlyPage() {
+    $current_script = basename($_SERVER['SCRIPT_NAME']);
+    
+    // Halaman khusus admin
+    $admin_only_pages = [
+        'dashboard.php',
+        'users.php', 
+        'user.php',
+        'categories.php',
+        'kategori.php',
+        'settings.php',
+        'articles.php',
+        'manage_articles.php'
+    ];
+    
+    return in_array($current_script, $admin_only_pages);
+}
+
+// Function untuk cek halaman debug/utility
 function isDebugOrUtilityFile() {
     $current_script = basename($_SERVER['SCRIPT_NAME']);
     $debug_files = [
@@ -174,13 +227,13 @@ function isDebugOrUtilityFile() {
     return in_array($current_script, $debug_files);
 }
 
-// PERBAIKAN: Jangan lakukan auth check untuk file debug jika sudah ada custom auth
+// Function untuk cek apakah skip auth check
 function skipAuthCheck() {
     $current_script = basename($_SERVER['SCRIPT_NAME']);
     
     // File-file yang menggunakan custom auth check sendiri
     $custom_auth_files = [
-        'token_test.php', // File ini sudah punya custom auth check di dalamnya
+        'token_test.php',
         'debug.php',
         'system_info.php'
     ];
@@ -188,98 +241,103 @@ function skipAuthCheck() {
     return in_array($current_script, $custom_auth_files);
 }
 
-// Skip auth check jika file menggunakan custom auth
+// Set security headers untuk semua halaman
+setSecurityHeaders();
+
+// Generate CSRF token untuk forms
+$csrf_token = generateCSRFToken();
+$current_user = getCurrentUser();
+
+// PERBAIKAN UTAMA: Cek berdasarkan jenis halaman
 if (skipAuthCheck()) {
-    // Hanya set security headers dan return
-    setSecurityHeaders();
-    
-    // Generate CSRF token untuk forms
-    $csrf_token = generateCSRFToken();
-    $current_user = getCurrentUser();
-    
+    // File dengan custom auth, hanya return
     return;
 }
 
-// Cek apakah user sudah login
-if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    if (canSendHeaders()) {
-        header("Location: ../login.php");
-        exit();
-    } else {
-        echo '<script>window.location.href = "../login.php";</script>';
-        exit();
+// Untuk halaman publik, tidak perlu cek login
+if (isPublicPage()) {
+    // Halaman publik: hanya cek session timeout jika user sedang login
+    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+        try {
+            checkSessionTimeout();
+            
+            // Validate session data integrity untuk user yang login
+            if (!isset($_SESSION['user_id']) || !isset($_SESSION['username']) || !isset($_SESSION['user_role'])) {
+                error_log("Invalid session data detected");
+                logout();
+            }
+            
+            // Log page access untuk user yang login
+            logUserActivity('page_access', $_SERVER['REQUEST_URI']);
+        } catch (Exception $e) {
+            error_log("Session check error: " . $e->getMessage());
+            // Untuk halaman publik, tidak perlu logout jika ada error
+        }
     }
+    
+    // Untuk halaman publik, selalu izinkan akses
+    return;
 }
 
-// Main security checks
-try {
-    // Set security headers
-    setSecurityHeaders();
-    
-    // Check session timeout (30 minutes default)
-    checkSessionTimeout();
-    
-    // Validate session data integrity
-    if (!isset($_SESSION['user_id']) || !isset($_SESSION['username']) || !isset($_SESSION['user_role'])) {
-        error_log("Invalid session data detected");
-        logout();
+// Untuk halaman yang membutuhkan login
+if (requiresLogin() || isAdminOnlyPage() || isDebugOrUtilityFile()) {
+    // Cek apakah user sudah login
+    if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+        if (canSendHeaders()) {
+            header("Location: ../project/login.php?redirect=" . urlencode($_SERVER['REQUEST_URI']));
+            exit();
+        } else {
+            echo '<script>window.location.href = "../project/login.php?redirect=' . urlencode($_SERVER['REQUEST_URI']) . '";</script>';
+            exit();
+        }
     }
     
-    // PERBAIKAN: Jangan lakukan redirect otomatis untuk debug/utility files
-    if (!isDebugOrUtilityFile()) {
-        // For admin pages, check admin role
-        $current_script = basename($_SERVER['SCRIPT_NAME']);
-        $admin_only_pages = [
-            'dashboard.php',
-            'users.php', 
-            'user.php',
-            'categories.php',
-            'kategori.php',
-            'settings.php',
-            'articles.php',
-            'manage_articles.php'
-        ];
+    // Main security checks untuk halaman yang butuh login
+    try {
+        // Check session timeout
+        checkSessionTimeout();
         
-        if (in_array($current_script, $admin_only_pages)) {
+        // Validate session data integrity
+        if (!isset($_SESSION['user_id']) || !isset($_SESSION['username']) || !isset($_SESSION['user_role'])) {
+            error_log("Invalid session data detected");
+            logout();
+        }
+        
+        // Cek role untuk halaman admin
+        if (isAdminOnlyPage()) {
             checkAdminRole();
         }
-    } else {
-        // Untuk debug/utility files, hanya cek apakah user adalah admin
-        if (!isAdmin()) {
+        
+        // Cek role untuk debug/utility files
+        if (isDebugOrUtilityFile() && !isAdmin()) {
             error_log("Access denied to debug file for user: " . ($_SESSION['username'] ?? 'unknown'));
             
             if (canSendHeaders()) {
-                header("Location: ../login.php?error=admin_required");
+                header("Location: ../project/login.php?error=admin_required");
                 exit();
             } else {
-                echo '<script>window.location.href = "../login.php?error=admin_required";</script>';
+                echo '<script>window.location.href = "../project/login.php?error=admin_required";</script>';
                 exit();
             }
         }
-    }
-    
-    // Log page access
-    logUserActivity('page_access', $_SERVER['REQUEST_URI']);
-    
-} catch (Exception $e) {
-    error_log("Auth check error: " . $e->getMessage());
-    
-    // Secure fallback
-    session_destroy();
-    if (canSendHeaders()) {
-        header("Location: ../login.php?error=security_error");
-        exit();
-    } else {
-        echo '<script>window.location.href = "../login.php?error=security_error";</script>';
-        exit();
+        
+        // Log page access
+        logUserActivity('page_access', $_SERVER['REQUEST_URI']);
+        
+    } catch (Exception $e) {
+        error_log("Auth check error: " . $e->getMessage());
+        
+        // Secure fallback
+        session_destroy();
+        if (canSendHeaders()) {
+            header("Location: ../project/login.php?error=security_error");
+            exit();
+        } else {
+            echo '<script>window.location.href = "../project/login.php?error=security_error";</script>';
+            exit();
+        }
     }
 }
-
-// Generate CSRF token for forms
-$csrf_token = generateCSRFToken();
-
-// Make current user data available globally
-$current_user = getCurrentUser();
 
 // Helper function for permission checks in views
 function canAccess($required_roles) {
@@ -300,7 +358,7 @@ function getRoleDisplayName($role) {
 // Function untuk bypass auth untuk specific files
 function bypassAuthForFile($filename) {
     $bypass_files = [
-        'token_test.php' => 'admin', // Hanya admin yang bisa akses
+        'token_test.php' => 'admin',
         'debug.php' => 'admin',
         'system_info.php' => 'admin',
         'log_viewer.php' => 'admin'
@@ -366,32 +424,35 @@ function detectSuspiciousActivity() {
     $user = getCurrentUser();
     $current_ip = $_SERVER['REMOTE_ADDR'] ?? '';
     
+    // Hanya cek jika user login
+    if (!$user) {
+        return;
+    }
+    
     // Cek jika IP berubah dalam session yang sama
     if (isset($_SESSION['last_ip']) && $_SESSION['last_ip'] !== $current_ip) {
         logSecurityEvent('ip_change', "IP changed from {$_SESSION['last_ip']} to {$current_ip}");
-        
-        // Optional: Force logout untuk security
-        // logout();
     }
     
     $_SESSION['last_ip'] = $current_ip;
     
     // Cek multiple login attempts
-    if (!checkRateLimit('login_attempt', 5, 900)) { // 5 attempts dalam 15 menit
+    if (!checkRateLimit('login_attempt', 5, 900)) {
         logSecurityEvent('rate_limit_exceeded', 'Too many login attempts');
-        // Bisa tambahkan CAPTCHA atau temporary ban
     }
 }
 
-// Jalankan detection
-detectSuspiciousActivity();
+// Jalankan detection hanya jika user login
+if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+    detectSuspiciousActivity();
+}
 
 // Set timezone jika belum di-set
 if (!ini_get('date.timezone')) {
     date_default_timezone_set('Asia/Jakarta');
 }
 
-// PERBAIKAN: Jangan force redirect untuk AJAX requests
+// Function untuk cek AJAX request
 function isAjaxRequest() {
     return !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
@@ -403,7 +464,7 @@ if (isAjaxRequest() && !isAdmin() && isDebugOrUtilityFile()) {
     echo json_encode([
         'status' => 'error',
         'message' => 'Admin access required',
-        'redirect' => '../login.php?error=admin_required'
+        'redirect' => '../project/login.php?error=admin_required'
     ]);
     exit();
 }

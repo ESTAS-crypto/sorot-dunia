@@ -1,7 +1,91 @@
 <?php
 $page_title = "Kelola Berita";
 require_once 'header.php';
-require_once '../config/image_config.php';
+require_once '../ajax/image_config.php';
+
+// ===== FUNGSI: Get dan Auto-Fix Image URL =====
+function getArticleImageWithAutoFix($article_id, $article_status, $koneksi) {
+    // Get image from database
+    $query = "SELECT i.id, i.filename, i.url, i.is_external 
+              FROM images i 
+              WHERE i.source_type = 'article' AND i.source_id = ? 
+              LIMIT 1";
+    
+    $stmt = mysqli_prepare($koneksi, $query);
+    if (!$stmt) {
+        return null;
+    }
+    
+    mysqli_stmt_bind_param($stmt, "i", $article_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $image = mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
+    
+    if (!$image || $image['is_external'] == 1) {
+        return $image; // External image atau tidak ada gambar
+    }
+    
+    // Map status ke folder
+    $folder_map = [
+        'draft' => 'draft',
+        'pending' => 'pending',
+        'published' => 'published',
+        'rejected' => 'rejected'
+    ];
+    
+    $correct_folder = $folder_map[$article_status] ?? 'pending';
+    $filename = $image['filename'];
+    $correct_url = "https://inievan.my.id/project/uploads/articles/{$correct_folder}/{$filename}";
+    
+    // Cek apakah URL sudah benar
+    if ($image['url'] !== $correct_url) {
+        // URL tidak sesuai, cek file fisik
+        $physical_path = __DIR__ . "/../uploads/articles/{$correct_folder}/{$filename}";
+        
+        if (file_exists($physical_path)) {
+            // File ada di lokasi yang benar, update database
+            $update_query = "UPDATE images SET url = ? WHERE id = ?";
+            $update_stmt = mysqli_prepare($koneksi, $update_query);
+            
+            if ($update_stmt) {
+                mysqli_stmt_bind_param($update_stmt, "si", $correct_url, $image['id']);
+                mysqli_stmt_execute($update_stmt);
+                mysqli_stmt_close($update_stmt);
+                
+                // Update array untuk return
+                $image['url'] = $correct_url;
+            }
+        } else {
+            // File tidak ada di folder yang seharusnya, cari di folder lain
+            $folders = ['draft', 'pending', 'published', 'rejected'];
+            foreach ($folders as $folder) {
+                $search_path = __DIR__ . "/../uploads/articles/{$folder}/{$filename}";
+                if (file_exists($search_path)) {
+                    // Gunakan URL dari folder yang ditemukan
+                    $image['url'] = "https://inievan.my.id/project/uploads/articles/{$folder}/{$filename}";
+                    break;
+                }
+            }
+        }
+    }
+    
+    return $image;
+}
+
+// ===== FUNGSI: Cek Permission Delete =====
+function canDeleteArticle($article, $current_user) {
+    if ($current_user['role'] === 'admin') {
+        return true;
+    }
+    
+    if ($article['author_id'] != $current_user['id']) {
+        return false;
+    }
+    
+    $allowed_statuses = ['draft', 'pending'];
+    return in_array($article['article_status'], $allowed_statuses);
+}
 
 // Get user articles with pagination
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
@@ -10,18 +94,20 @@ $offset = ($page - 1) * $limit;
 
 // Build query based on user role
 if (isAdmin()) {
-    $query = "SELECT a.*, u.full_name as author_name, c.name as category_name 
+    $query = "SELECT a.*, u.full_name as author_name, c.name as category_name, s.slug as article_slug
               FROM articles a 
               LEFT JOIN users u ON a.author_id = u.id 
               LEFT JOIN categories c ON a.category_id = c.category_id 
+              LEFT JOIN slugs s ON (s.related_id = a.article_id AND s.type = 'article')
               ORDER BY a.publication_date DESC 
               LIMIT ? OFFSET ?";
     $count_query = "SELECT COUNT(*) FROM articles";
 } else {
-    $query = "SELECT a.*, u.full_name as author_name, c.name as category_name 
+    $query = "SELECT a.*, u.full_name as author_name, c.name as category_name, s.slug as article_slug
               FROM articles a 
               LEFT JOIN users u ON a.author_id = u.id 
               LEFT JOIN categories c ON a.category_id = c.category_id 
+              LEFT JOIN slugs s ON (s.related_id = a.article_id AND s.type = 'article')
               WHERE a.author_id = ? 
               ORDER BY a.publication_date DESC 
               LIMIT ? OFFSET ?";
@@ -56,7 +142,7 @@ while ($row = mysqli_fetch_assoc($articles_result)) {
     $articles[] = $row;
 }
 
-// Get statistics for admin
+// Get statistics
 if (isAdmin()) {
     $stats = [
         'total' => $total_articles,
@@ -75,7 +161,24 @@ if (isAdmin()) {
 ?>
 
 <style>
-/* Additional styles for manage page */
+:root {
+    --primary-color: #000000;
+    --secondary-color: #333333;
+    --accent-color: #666666;
+    --light-gray: #f8f9fa;
+    --medium-gray: #e9ecef;
+    --border-color: #dee2e6;
+    --white: #ffffff;
+    --success-color: #28a745;
+    --error-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+    --hover-color: #f1f3f4;
+    --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.12);
+    --shadow-heavy: 0 8px 32px rgba(0, 0, 0, 0.16);
+}
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -152,7 +255,6 @@ if (isAdmin()) {
     color: #dc3545;
 }
 
-/* Article Cards */
 .articles-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
@@ -243,6 +345,11 @@ if (isAdmin()) {
     color: #721c24;
 }
 
+.status-draft {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
 .article-excerpt {
     color: var(--accent-color);
     font-size: 0.9rem;
@@ -276,10 +383,16 @@ if (isAdmin()) {
     height: 36px;
 }
 
-.btn-action:hover {
+.btn-action:hover:not(:disabled) {
     background: var(--hover-color);
     border-color: var(--primary-color);
     color: var(--primary-color);
+}
+
+.btn-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--light-gray);
 }
 
 .btn-action.btn-view {
@@ -287,7 +400,7 @@ if (isAdmin()) {
     color: #17a2b8;
 }
 
-.btn-action.btn-view:hover {
+.btn-action.btn-view:hover:not(:disabled) {
     background: #17a2b8;
     color: var(--white);
 }
@@ -297,7 +410,7 @@ if (isAdmin()) {
     color: #6c757d;
 }
 
-.btn-action.btn-edit:hover {
+.btn-action.btn-edit:hover:not(:disabled) {
     background: #6c757d;
     color: var(--white);
 }
@@ -307,7 +420,7 @@ if (isAdmin()) {
     color: #28a745;
 }
 
-.btn-action.btn-approve:hover {
+.btn-action.btn-approve:hover:not(:disabled) {
     background: #28a745;
     color: var(--white);
 }
@@ -317,7 +430,7 @@ if (isAdmin()) {
     color: #ffc107;
 }
 
-.btn-action.btn-reject:hover {
+.btn-action.btn-reject:hover:not(:disabled) {
     background: #ffc107;
     color: var(--primary-color);
 }
@@ -327,12 +440,11 @@ if (isAdmin()) {
     color: #dc3545;
 }
 
-.btn-action.btn-delete:hover {
+.btn-action.btn-delete:hover:not(:disabled) {
     background: #dc3545;
     color: var(--white);
 }
 
-/* Empty State */
 .empty-state {
     text-align: center;
     padding: 4rem 2rem;
@@ -355,7 +467,6 @@ if (isAdmin()) {
     margin-bottom: 2rem;
 }
 
-/* Pagination */
 .pagination {
     justify-content: center;
     margin-top: 3rem;
@@ -390,7 +501,6 @@ if (isAdmin()) {
     color: var(--accent-color);
 }
 
-/* Responsive Design */
 @media (max-width: 768px) {
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -426,7 +536,6 @@ if (isAdmin()) {
 }
 </style>
 
-<!-- Main Content -->
 <div class="container" style="margin-top: 100px; margin-bottom: 50px;">
     <div class="upload-container">
         <div class="upload-header">
@@ -440,7 +549,6 @@ if (isAdmin()) {
             </p>
         </div>
 
-        <!-- Statistics -->
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-icon">
@@ -475,7 +583,6 @@ if (isAdmin()) {
             </div>
         </div>
 
-        <!-- Articles -->
         <?php if (empty($articles)): ?>
         <div class="empty-state">
             <i class="fas fa-newspaper"></i>
@@ -488,13 +595,27 @@ if (isAdmin()) {
         <?php else: ?>
         <div class="articles-grid">
             <?php foreach ($articles as $article): ?>
+            <?php 
+            // Get article image dengan auto-fix
+            $image = getArticleImageWithAutoFix(
+                $article['article_id'], 
+                $article['article_status'], 
+                $koneksi
+            );
+            
+            // Cek permission delete
+            $can_delete = canDeleteArticle($article, $current_user);
+            ?>
             <div class="article-card">
-                <?php if (!empty($article['image_filename'])): ?>
-                <img src="<?php echo getArticleImageUrl($article['image_filename']); ?>"
-                    alt="<?php echo htmlspecialchars($article['title']); ?>" class="article-image">
+                <?php if ($image): ?>
+                    <img src="<?php echo htmlspecialchars($image['url']); ?>"
+                         alt="<?php echo htmlspecialchars($article['title']); ?>" 
+                         class="article-image"
+                         onerror="this.onerror=null; this.style.display='none'; this.parentElement.insertAdjacentHTML('afterbegin', '<div class=\'article-image\'><i class=\'fas fa-image-slash\'></i><br><small>Gambar tidak ditemukan</small></div>');">
                 <?php else: ?>
                 <div class="article-image">
                     <i class="fas fa-image"></i>
+                    <br><small>Tidak ada gambar</small>
                 </div>
                 <?php endif; ?>
 
@@ -531,17 +652,17 @@ if (isAdmin()) {
                     </div>
 
                     <div class="article-actions">
-                        <?php if ($article['article_status'] === 'published' && !empty($article['title_slug'])): ?>
-                        <a href="/project/article.php?slug=<?php echo $article['title_slug']; ?>"
+                        <?php if ($article['article_status'] === 'published' && !empty($article['article_slug'])): ?>
+                        <a href="/project/artikel.php?slug=<?php echo $article['article_slug']; ?>"
                             class="btn-action btn-view" title="Lihat Artikel" target="_blank">
                             <i class="fas fa-eye"></i>
                         </a>
                         <?php endif; ?>
 
-                        <button class="btn-action btn-edit" onclick="editArticle(<?php echo $article['article_id']; ?>)"
-                            title="Edit">
+                        <a href="uplod.php?slug=<?php echo urlencode($article['article_slug']); ?>"
+                            class="btn-action btn-edit" title="Edit">
                             <i class="fas fa-edit"></i>
-                        </button>
+                        </a>
 
                         <?php if (isAdmin() && $article['article_status'] === 'pending'): ?>
                         <button class="btn-action btn-approve"
@@ -555,10 +676,18 @@ if (isAdmin()) {
                         </button>
                         <?php endif; ?>
 
+                        <?php if ($can_delete): ?>
                         <button class="btn-action btn-delete"
-                            onclick="deleteArticle(<?php echo $article['article_id']; ?>)" title="Delete">
+                            onclick="deleteArticle(<?php echo $article['article_id']; ?>, '<?php echo $article['article_status']; ?>')" 
+                            title="Delete">
                             <i class="fas fa-trash"></i>
                         </button>
+                        <?php else: ?>
+                        <button class="btn-action btn-delete" disabled
+                            title="Tidak bisa menghapus artikel yang sudah published/rejected">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -566,7 +695,6 @@ if (isAdmin()) {
         </div>
         <?php endif; ?>
 
-        <!-- Pagination -->
         <?php if ($total_pages > 1): ?>
         <nav aria-label="Page navigation">
             <ul class="pagination">
@@ -597,5 +725,109 @@ if (isAdmin()) {
         <?php endif; ?>
     </div>
 </div>
+
+<script>
+function approveArticle(articleId) {
+    if (confirm('Approve artikel ini?')) {
+        fetch('/project/ajax/admin_actions.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'approve',
+                article_id: articleId,
+                csrf_token: '<?php echo $csrf_token; ?>'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Artikel berhasil diapprove!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Network error occurred');
+        });
+    }
+}
+
+function rejectArticle(articleId) {
+    const reason = prompt('Alasan penolakan (opsional):');
+    if (reason !== null) {
+        fetch('/project/ajax/admin_actions.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'reject',
+                article_id: articleId,
+                reason: reason,
+                csrf_token: '<?php echo $csrf_token; ?>'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Artikel berhasil ditolak!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Network error occurred');
+        });
+    }
+}
+
+function deleteArticle(articleId, articleStatus) {
+    const userRole = '<?php echo $current_user['role']; ?>';
+    
+    if (userRole !== 'admin') {
+        if (articleStatus !== 'draft' && articleStatus !== 'pending') {
+            alert('Anda hanya bisa menghapus artikel dengan status draft atau pending.\n\nArtikel yang sudah published atau rejected tidak bisa dihapus.');
+            return;
+        }
+    }
+    
+    let confirmMessage = 'Hapus artikel ini? Tindakan tidak dapat dibatalkan.';
+    
+    if (userRole !== 'admin') {
+        confirmMessage = 'Hapus artikel dengan status ' + articleStatus.toUpperCase() + '?\n\nTindakan ini tidak dapat dibatalkan.';
+    }
+    
+    if (confirm(confirmMessage)) {
+        fetch('/project/ajax/admin_actions.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'delete',
+                article_id: articleId,
+                csrf_token: '<?php echo $csrf_token; ?>'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Artikel berhasil dihapus!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Network error occurred');
+            console.error('Delete error:', error);
+        });
+    }
+}
+</script>
 
 <?php require_once 'footer.php'; ?>

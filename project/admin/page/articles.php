@@ -7,8 +7,10 @@ checkAdminRole();
 $error_message = '';
 $success_message = '';
 
-// Function untuk handle upload gambar
+// Function untuk handle upload gambar dengan integrasi tabel images
 function handleImageUpload($file) {
+    global $koneksi;
+    
     $upload_dir = '../uploads/articles/';
     
     if (!file_exists($upload_dir)) {
@@ -18,7 +20,12 @@ function handleImageUpload($file) {
     $allowed_types = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     $max_size = 300 * 1024; // 300KB
     
-    if (!in_array($file['type'], $allowed_types)) {
+    // Validasi MIME type
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    
+    if (!in_array($mime_type, $allowed_types)) {
         throw new Exception('Format file tidak didukung. Hanya JPG, PNG, WEBP, dan GIF yang diizinkan.');
     }
     
@@ -29,30 +36,76 @@ function handleImageUpload($file) {
     $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
     $filename = 'article_' . time() . '_' . uniqid() . '.' . $extension;
     $filepath = $upload_dir . $filename;
+    $url_path = '/uploads/articles/' . $filename;
     
     if (!move_uploaded_file($file['tmp_name'], $filepath)) {
         throw new Exception('Gagal mengupload file.');
     }
     
-    return $filename;
+    // Get image dimensions
+    $image_info = getimagesize($filepath);
+    $width = $image_info[0] ?? null;
+    $height = $image_info[1] ?? null;
+    $size_bytes = filesize($filepath);
+    
+    // Insert ke tabel images
+    $insert_image_query = "INSERT INTO images (filename, url, mime, width, height, size_bytes, source_type, is_external, local_path) 
+                          VALUES (?, ?, ?, ?, ?, ?, 'article', 0, ?)";
+    $stmt = mysqli_prepare($koneksi, $insert_image_query);
+    mysqli_stmt_bind_param($stmt, "sssiiis", $filename, $url_path, $mime_type, $width, $height, $size_bytes, $filepath);
+    
+    if (mysqli_stmt_execute($stmt)) {
+        $image_id = mysqli_insert_id($koneksi);
+        mysqli_stmt_close($stmt);
+        return $image_id;
+    } else {
+        mysqli_stmt_close($stmt);
+        unlink($filepath); // Hapus file jika gagal insert ke database
+        throw new Exception('Gagal menyimpan data gambar ke database.');
+    }
 }
 
-function deleteImageFile($filename) {
-    if ($filename && file_exists('../uploads/articles/' . $filename)) {
-        unlink('../uploads/articles/' . $filename);
+function deleteImageFile($image_id) {
+    global $koneksi;
+    
+    if ($image_id) {
+        // Get image info first
+        $query = "SELECT filename, local_path, url FROM images WHERE id = ?";
+        $stmt = mysqli_prepare($koneksi, $query);
+        mysqli_stmt_bind_param($stmt, "i", $image_id);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        
+        if ($row = mysqli_fetch_assoc($result)) {
+            // Delete physical file
+            if ($row['local_path'] && file_exists($row['local_path'])) {
+                unlink($row['local_path']);
+            } elseif (!$row['local_path'] && $row['filename']) {
+                $old_path = '../uploads/articles/' . $row['filename'];
+                if (file_exists($old_path)) {
+                    unlink($old_path);
+                }
+            }
+            
+            // Delete from database
+            $delete_query = "DELETE FROM images WHERE id = ?";
+            $stmt_delete = mysqli_prepare($koneksi, $delete_query);
+            mysqli_stmt_bind_param($stmt_delete, "i", $image_id);
+            mysqli_stmt_execute($stmt_delete);
+            mysqli_stmt_close($stmt_delete);
+        }
+        mysqli_stmt_close($stmt);
     }
 }
 
 function getArticleImageURL($article) {
-    if ($article['image_filename']) {
-        return '../uploads/articles/' . $article['image_filename'];
-    } elseif ($article['image_url']) {
+    if ($article['image_url']) {
         return $article['image_url'];
     }
     return null;
 }
 
-// Handle form submissions
+// Handle form submissions - ADD ARTICLE
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'add_article') {
     $title = sanitize_input($_POST['title'] ?? '');
     $content = $_POST['content'] ?? '';
@@ -60,36 +113,63 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
     $article_status = sanitize_input($_POST['article_status'] ?? 'pending');
     $author_id = $_SESSION['user_id'] ?? 0;
     $image_url = sanitize_input($_POST['image_url'] ?? '');
-    $image_filename = null;
+    $featured_image_id = null;
     
     if (empty($title) || empty($content) || $category_id <= 0 || $author_id <= 0) {
         $error_message = 'Semua field wajib harus diisi';
     } else {
         try {
+            // Handle image upload
             if (isset($_FILES['image_file']) && $_FILES['image_file']['error'] == UPLOAD_ERR_OK) {
-                $image_filename = handleImageUpload($_FILES['image_file']);
-                $image_url = '';
+                $featured_image_id = handleImageUpload($_FILES['image_file']);
+                $image_url = ''; // Clear URL if file uploaded
+            } elseif (!empty($image_url)) {
+                // Handle external URL image
+                $filename = 'external_' . time() . '_' . uniqid();
+                $insert_image_query = "INSERT INTO images (filename, url, mime, source_type, is_external) 
+                                      VALUES (?, ?, 'image/jpeg', 'article', 1)";
+                $stmt = mysqli_prepare($koneksi, $insert_image_query);
+                mysqli_stmt_bind_param($stmt, "ss", $filename, $image_url);
+                
+                if (mysqli_stmt_execute($stmt)) {
+                    $featured_image_id = mysqli_insert_id($koneksi);
+                    mysqli_stmt_close($stmt);
+                } else {
+                    mysqli_stmt_close($stmt);
+                }
             }
             
-            $query = "INSERT INTO articles (title, content, category_id, author_id, article_status, image_url, image_filename, publication_date) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, NOW())";
+            // Insert article dengan featured_image_id
+            $query = "INSERT INTO articles (title, content, category_id, author_id, article_status, featured_image_id, publication_date) 
+                      VALUES (?, ?, ?, ?, ?, ?, NOW())";
             $stmt = mysqli_prepare($koneksi, $query);
-            if ($stmt) {
-                mysqli_stmt_bind_param($stmt, "ssiisss", $title, $content, $category_id, $author_id, $article_status, $image_url, $image_filename);
-                if (mysqli_stmt_execute($stmt)) {
-                    $success_message = 'Artikel berhasil ditambahkan';
-                } else {
-                    if ($image_filename) deleteImageFile($image_filename);
-                    $error_message = 'Gagal menambahkan artikel';
+            mysqli_stmt_bind_param($stmt, "ssiisi", $title, $content, $category_id, $author_id, $article_status, $featured_image_id);
+            
+            if (mysqli_stmt_execute($stmt)) {
+                $article_id = mysqli_insert_id($koneksi);
+                
+                // Update source_id pada tabel images
+                if ($featured_image_id) {
+                    $update_image_query = "UPDATE images SET source_id = ? WHERE id = ?";
+                    $stmt_update = mysqli_prepare($koneksi, $update_image_query);
+                    mysqli_stmt_bind_param($stmt_update, "ii", $article_id, $featured_image_id);
+                    mysqli_stmt_execute($stmt_update);
+                    mysqli_stmt_close($stmt_update);
                 }
-                mysqli_stmt_close($stmt);
+                
+                $success_message = 'Artikel berhasil ditambahkan';
+            } else {
+                if ($featured_image_id) deleteImageFile($featured_image_id);
+                $error_message = 'Gagal menambahkan artikel: ' . mysqli_error($koneksi);
             }
+            mysqli_stmt_close($stmt);
         } catch (Exception $e) {
             $error_message = $e->getMessage();
         }
     }
 }
 
+// Handle EDIT ARTICLE
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'edit_article') {
     $article_id = intval($_POST['article_id'] ?? 0);
     $title = sanitize_input($_POST['title'] ?? '');
@@ -97,41 +177,61 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
     $category_id = intval($_POST['category_id'] ?? 0);
     $article_status = sanitize_input($_POST['article_status'] ?? 'pending');
     $image_url = sanitize_input($_POST['image_url'] ?? '');
-    $image_filename = null;
-    $old_image_filename = $_POST['old_image_filename'] ?? '';
+    $old_image_id = intval($_POST['old_image_id'] ?? 0);
+    $featured_image_id = $old_image_id;
     
     if (empty($title) || empty($content) || $category_id <= 0 || $article_id <= 0) {
         $error_message = 'Semua field wajib harus diisi';
     } else {
         try {
+            // Handle new image upload
             if (isset($_FILES['image_file']) && $_FILES['image_file']['error'] == UPLOAD_ERR_OK) {
-                $image_filename = handleImageUpload($_FILES['image_file']);
-                $image_url = '';
+                $featured_image_id = handleImageUpload($_FILES['image_file']);
                 
-                if ($old_image_filename) {
-                    deleteImageFile($old_image_filename);
+                // Update source_id
+                $update_image_query = "UPDATE images SET source_id = ? WHERE id = ?";
+                $stmt_update = mysqli_prepare($koneksi, $update_image_query);
+                mysqli_stmt_bind_param($stmt_update, "ii", $article_id, $featured_image_id);
+                mysqli_stmt_execute($stmt_update);
+                mysqli_stmt_close($stmt_update);
+                
+                // Delete old image
+                if ($old_image_id && $old_image_id != $featured_image_id) {
+                    deleteImageFile($old_image_id);
                 }
-            } else {
-                $image_filename = $old_image_filename;
+                $image_url = ''; // Clear URL if file uploaded
+            } elseif (!empty($image_url) && empty($old_image_id)) {
+                // Handle new external URL
+                $filename = 'external_' . $article_id . '_' . time();
+                $insert_image_query = "INSERT INTO images (filename, url, mime, source_type, source_id, is_external) 
+                                      VALUES (?, ?, 'image/jpeg', 'article', ?, 1)";
+                $stmt = mysqli_prepare($koneksi, $insert_image_query);
+                mysqli_stmt_bind_param($stmt, "ssi", $filename, $image_url, $article_id);
+                
+                if (mysqli_stmt_execute($stmt)) {
+                    $featured_image_id = mysqli_insert_id($koneksi);
+                    mysqli_stmt_close($stmt);
+                }
             }
             
-            $query = "UPDATE articles SET title = ?, content = ?, category_id = ?, article_status = ?, image_url = ?, image_filename = ? WHERE article_id = ?";
+            // Update article
+            $query = "UPDATE articles SET title = ?, content = ?, category_id = ?, article_status = ?, featured_image_id = ? WHERE article_id = ?";
             $stmt = mysqli_prepare($koneksi, $query);
-            if ($stmt) {
-                mysqli_stmt_bind_param($stmt, "ssisssi", $title, $content, $category_id, $article_status, $image_url, $image_filename, $article_id);
-                if (mysqli_stmt_execute($stmt)) {
-                    $success_message = 'Artikel berhasil diupdate';
-                } else {
-                    $error_message = 'Gagal mengupdate artikel';
-                }
-                mysqli_stmt_close($stmt);
+            mysqli_stmt_bind_param($stmt, "ssiiii", $title, $content, $category_id, $article_status, $featured_image_id, $article_id);
+            
+            if (mysqli_stmt_execute($stmt)) {
+                $success_message = 'Artikel berhasil diupdate';
+            } else {
+                $error_message = 'Gagal mengupdate artikel: ' . mysqli_error($koneksi);
             }
+            mysqli_stmt_close($stmt);
         } catch (Exception $e) {
             $error_message = $e->getMessage();
         }
     }
 }
 
+// Handle APPROVE ARTICLE
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'approve_article') {
     $article_id = intval($_POST['article_id'] ?? 0);
     $admin_notes = sanitize_input($_POST['admin_notes'] ?? '');
@@ -143,12 +243,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
         if (mysqli_stmt_execute($stmt)) {
             $success_message = 'Artikel berhasil diapprove dan dipublikasikan';
         } else {
-            $error_message = 'Gagal mengapprove artikel';
+            $error_message = 'Gagal mengapprove artikel: ' . mysqli_error($koneksi);
         }
         mysqli_stmt_close($stmt);
     }
 }
 
+// Handle REJECT ARTICLE
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'reject_article') {
     $article_id = intval($_POST['article_id'] ?? 0);
     $rejection_reason = sanitize_input($_POST['rejection_reason'] ?? '');
@@ -163,17 +264,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
             if (mysqli_stmt_execute($stmt)) {
                 $success_message = 'Artikel berhasil ditolak';
             } else {
-                $error_message = 'Gagal menolak artikel';
+                $error_message = 'Gagal menolak artikel: ' . mysqli_error($koneksi);
             }
             mysqli_stmt_close($stmt);
         }
     }
 }
 
+// Handle DELETE ARTICLE
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'delete_article') {
     $delete_id = intval($_POST['article_id'] ?? 0);
     
-    $check_query = "SELECT article_id, author_id, image_filename FROM articles WHERE article_id = ?";
+    $check_query = "SELECT article_id, author_id, featured_image_id FROM articles WHERE article_id = ?";
     $stmt_check = mysqli_prepare($koneksi, $check_query);
     if ($stmt_check) {
         mysqli_stmt_bind_param($stmt_check, "i", $delete_id);
@@ -187,12 +289,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                 if ($stmt_delete) {
                     mysqli_stmt_bind_param($stmt_delete, "i", $delete_id);
                     if (mysqli_stmt_execute($stmt_delete)) {
-                        if ($row['image_filename']) {
-                            deleteImageFile($row['image_filename']);
+                        // Delete associated image
+                        if ($row['featured_image_id']) {
+                            deleteImageFile($row['featured_image_id']);
                         }
                         $success_message = 'Artikel berhasil dihapus';
                     } else {
-                        $error_message = 'Gagal menghapus artikel';
+                        $error_message = 'Gagal menghapus artikel: ' . mysqli_error($koneksi);
                     }
                     mysqli_stmt_close($stmt_delete);
                 }
@@ -206,24 +309,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
     }
 }
 
-// Fetch all articles
+// Fetch all articles dengan JOIN ke tabel images
 $query = "SELECT a.*, u.username as author_name, c.name as category_name,
-          approver.username as approved_by_name, rejecter.username as rejected_by_name
+          approver.username as approved_by_name, rejecter.username as rejected_by_name,
+          i.id as image_id, i.filename as image_filename, i.url as image_url, i.is_external
           FROM articles a 
           LEFT JOIN users u ON a.author_id = u.id 
           LEFT JOIN categories c ON a.category_id = c.category_id
           LEFT JOIN users approver ON a.approved_by = approver.id
           LEFT JOIN users rejecter ON a.rejected_by = rejecter.id
+          LEFT JOIN images i ON a.featured_image_id = i.id
           ORDER BY a.publication_date DESC";
 $result = mysqli_query($koneksi, $query);
-$all_articles = mysqli_fetch_all($result, MYSQLI_ASSOC);
+
+if (!$result) {
+    $error_message = 'Error mengambil data artikel: ' . mysqli_error($koneksi);
+    $all_articles = [];
+} else {
+    $all_articles = mysqli_fetch_all($result, MYSQLI_ASSOC);
+}
 
 // Fetch categories
 $query = "SELECT category_id, name FROM categories ORDER BY name";
 $result = mysqli_query($koneksi, $query);
 $categories = [];
-while ($row = mysqli_fetch_assoc($result)) {
-    $categories[$row['category_id']] = $row['name'];
+if ($result) {
+    while ($row = mysqli_fetch_assoc($result)) {
+        $categories[$row['category_id']] = $row['name'];
+    }
 }
 
 function formatDate($date) {
@@ -650,6 +763,16 @@ function truncateText($text, $length = 100) {
                             </select>
                         </div>
                     </div>
+                     <div class="col-md-6">
+                            <label for="add_article_status" class="form-label">
+                                <i class="bi bi-flag me-2"></i>Berlangganan
+                            </label>
+                            <select class="form-select" name="article_status" id="add_article_status">
+                                <option value="pending">Free</option>
+                                <option value="draft">Premium</option>
+                            </select>
+                        </div>
+                    </div>
 
                     <div class="mb-3">
                         <label class="form-label">
@@ -729,7 +852,7 @@ function truncateText($text, $length = 100) {
             <form method="POST" action="" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="edit_article">
                 <input type="hidden" name="article_id" id="edit_article_id">
-                <input type="hidden" name="old_image_filename" id="edit_old_image_filename">
+                <input type="hidden" name="old_image_id" id="edit_old_image_id">
 
                 <div class="modal-body">
                     <div class="mb-3">
@@ -763,7 +886,16 @@ function truncateText($text, $length = 100) {
                             </select>
                         </div>
                     </div>
-
+                <div class="col-md-6">
+                            <label for="add_article_status" class="form-label">
+                                <i class="bi bi-flag me-2"></i>Berlangganan
+                            </label>
+                            <select class="form-select" name="article_status" id="add_article_status">
+                                <option value="pending">Free</option>
+                                <option value="draft">Premium</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">
                             <i class="bi bi-image me-2"></i>Gambar Artikel
