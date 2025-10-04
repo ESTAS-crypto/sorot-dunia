@@ -1,39 +1,30 @@
-# Sorot Dunia 🌐
+# 🌐 Sorot Dunia
 
-![Sorot Dunia](./assets/logo.png)
-
-**Sorot Dunia** adalah platform web berita sederhana yang dirancang untuk menyajikan berita lokal dan internasional dengan tampilan bersih, terstruktur, dan mudah dikembangkan. README ini ditulis untuk membantu kamu (pengembang / admin) memulai, mengonfigurasikan, dan mengembangkan proyek ini lebih lanjut.
+**Sorot Dunia** adalah portal berita daring dengan visi menyajikan kabar global dan lokal secara cepat, akurat, dan mendalam. Kami percaya bahwa informasi yang tepat waktu & berimbang adalah pondasi masyarakat yang cerdas & kritis.
 
 ---
 
-## 🎯 Tujuan Proyek
+## 🧭 Fitur Utama
 
-1. Menyajikan berita secara cepat dan rapi.
-2. Menjadi basis yang mudah dikembangkan untuk fitur-fitur jurnalistik (kategori, tag, draft, publikasi terjadwal, dsb.).
-3. Memberikan struktur kode yang mudah dipahami bagi developer pemula sampai menengah.
-
----
-
-## ✨ Fitur Utama (lebih lengkap)
-
-* Halaman beranda yang menampilkan ringkasan berita terbaru.
-* Halaman kategori untuk mengelompokkan berita.
-* Halaman detail artikel lengkap dengan gambar, metadata, dan slug SEO.
-* Pencarian sederhana berdasarkan judul / isi.
-* Sistem draf (opsional) untuk menyimpan artikel sebelum dipublikasi.
-* Struktur modular view (multi-view) sehingga mudah menambah layout baru.
-* Responsif: tampilan mendukung mobile dan desktop.
-* Upload gambar untuk artikel (pastikan folder `uploads/` punya permission).
+- Tampilkan berbagai kategori berita (politik, teknologi, ekonomi, budaya, dll)  
+- Sistem *multi-view* untuk tampilan dinamis dan responsif  
+- Halaman detail berita lengkap dengan gambar, video, dan metadata  
+- Pencarian & filter berdasarkan kata kunci, tanggal, atau kategori  
+- Tampilan mobile-friendly (responsif)  
+- Struktur kode modular & mudah dikembangkan  
 
 ---
 
-## 🧩 Teknologi yang Digunakan
+## 🛠️ Teknologi & Struktur Proyek
 
-* Bahasa: PHP (vanilla / minimal framework)
-* Frontend: HTML, CSS, JavaScript
-* Database: MySQL / MariaDB (opsional — bisa pakai file statis untuk prototipe)
-* Server: Apache / Nginx + PHP-FPM (atau XAMPP / Laragon untuk development)
-* Frame Work : BOOSTRAP
+| Komponen | Teknologi | Keterangan |
+|----------|-----------|------------|
+| Backend / logika | PHP | Pemrosesan data berita & routing |
+| Frontend | HTML / CSS / JavaScript | Antarmuka pengguna & interaktivitas |
+| Struktur folder | `project/`, `multi-view.php`, `index.php`, dll | Organisasi modul tampilan & logika |
+| Database (opsional) | — | Jika kamu memakai DB, sambungkan di modul backend |
+
+---
 
 ## 🚀 Cara Instalasi / Setup
 
@@ -43,11 +34,3 @@ Berikut panduan dasar untuk menjalankan Sorot Dunia di lingkungan lokal atau ser
    ```bash
    git clone https://github.com/ESTAS-crypto/sorot-dunia.git
    cd sorot-dunia
-
-   📬 Kontak
-
-Jika ada pertanyaan atau mau kolaborasi, hubungi:
-
-Email: eatharasya@gmail.com
-
-GitHub: https://github.com/ESTAS-crypto/sorot-dunia (Issues & Discussions)
