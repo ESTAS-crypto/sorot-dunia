@@ -1,6 +1,6 @@
 # 🌐 Sorot Dunia
 
-![Sorot Dunia](../img/logo.png)
+![alt text](project/img/Logo.webp)
 
 **Sorot Dunia** adalah platform web berita sederhana yang dirancang untuk menyajikan berita lokal dan internasional dengan tampilan bersih, terstruktur, dan mudah dikembangkan. README ini ditulis untuk membantu kamu (pengembang / admin) memulai, mengonfigurasikan, dan mengembangkan proyek ini lebih lanjut.
 
