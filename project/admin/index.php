@@ -10,9 +10,9 @@ error_reporting(E_ALL);
 // Include config
 include '../config/config.php';
 
-// Check if user is logged in
+// ========== CEK LOGIN - REDIRECT KE admin-login.php ==========
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    header("Location: ../login.php?error=not_logged_in");
+    header("Location: admin-login.php");
     exit();
 }
 
@@ -32,7 +32,10 @@ if (!isset($_SESSION['user_role']) && isset($_SESSION['user_id'])) {
 // Check if user is admin
 if (!isset($_SESSION['user_role']) || strtolower($_SESSION['user_role']) !== 'admin') {
     error_log("Access denied for user: " . ($_SESSION['username'] ?? 'unknown'));
-    header("Location: ../login.php?error=access_denied");
+    
+    // Logout dan redirect ke login
+    session_destroy();
+    header("Location: admin-login.php?error=not_admin");
     exit();
 }
 
@@ -80,7 +83,7 @@ switch ($page) {
     case 'analytics':
         include 'page/analisis.php';
         break;
-        case 'token':
+    case 'token':
         include 'page/token_test.php';
         break;
     default:

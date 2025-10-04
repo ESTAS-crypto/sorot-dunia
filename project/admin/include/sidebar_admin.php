@@ -66,9 +66,9 @@ $current_page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
         <hr class="my-3" style="border-color: var(--border-color);">
         
         <!-- Logout Section -->
-        <a href="../logout.php" 
-           class="nav-link text-danger"
-           onclick="return confirm('Apakah Anda yakin ingin logout?')">
+        <a href="admin-login.php?logout=success" 
+        class="nav-link text-danger"
+        onclick="return confirm('Apakah Anda yakin ingin logout?')">
             <i class="bi bi-box-arrow-right"></i>Logout
         </a>
         

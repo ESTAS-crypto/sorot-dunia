@@ -20,7 +20,7 @@ if (empty($categories)) {
     $categories = ['politik', 'ekonomi', 'olahraga', 'teknologi', 'hiburan', 'kesehatan', 'pendidikan', 'kriminal', 'internasional', 'lainnya'];
 }
 
-// ===== PERBAIKAN UTAMA: Check if editing existing article - USING SLUG =====
+// Check if editing existing article - USING SLUG
 $editing = false;
 $article_data = null;
 $existing_tags = [];
@@ -29,7 +29,6 @@ $article_image = null;
 if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     $article_slug = trim($_GET['slug']);
     
-    // Query menggunakan slug JOIN dengan table slugs
     if (isAdmin()) {
         $article_query = "SELECT a.*, s.slug, c.name as category_name, 
                          GROUP_CONCAT(DISTINCT t.name) as tag_names,
@@ -74,12 +73,10 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     if ($article_data) {
         $editing = true;
         
-        // Parse tags
         if (!empty($article_data['tag_names'])) {
             $existing_tags = explode(',', $article_data['tag_names']);
         }
         
-        // Get image info
         if ($article_data['image_id']) {
             $article_image = [
                 'id' => $article_data['image_id'],
@@ -90,7 +87,6 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
         }
         
     } else {
-        // Article not found or no access
         header('Location: manage.php?error=article_not_found');
         exit();
     }
@@ -164,6 +160,7 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     font-weight: 500;
 }
 
+/* ===== DRAG AND DROP STYLES - HANYA DI AREA GAMBAR ===== */
 .file-upload-area {
     border: 3px dashed var(--border-color);
     border-radius: 15px;
@@ -173,17 +170,78 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     transition: all 0.3s ease;
     background: var(--white);
     margin-bottom: 1.5rem;
+    position: relative;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
-.file-upload-area:hover,
-.file-upload-area.dragover {
+/* CRITICAL: Prevent pointer events on children */
+.file-upload-area * {
+    pointer-events: none;
+}
+
+.file-upload-area:hover {
     border-color: var(--primary-color);
     background: rgba(0,0,0,0.02);
+    transform: translateY(-2px);
+}
+
+.file-upload-area.dragover {
+    border-color: #28a745 !important;
+    background: rgba(40, 167, 69, 0.1) !important;
+    border-style: solid !important;
+    transform: scale(1.02);
+    box-shadow: 0 8px 24px rgba(40, 167, 69, 0.2);
+}
+
+.file-upload-area.dragover::before {
+    content: '📁 Drop file di sini';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #28a745;
+    background: white;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 10;
+    pointer-events: none;
+}
+
+.file-upload-area.dragover > div {
+    opacity: 0.3;
 }
 
 .upload-progress {
     display: none;
     margin-top: 1rem;
+    padding: 1rem;
+    background: var(--light-gray);
+    border-radius: 8px;
+}
+
+.upload-progress .progress {
+    height: 30px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #e9ecef;
+}
+
+.upload-progress .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #28a745, #20c997);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    transition: width 0.3s ease;
 }
 
 .upload-status {
@@ -191,27 +249,52 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     margin-top: 1rem;
     padding: 1rem;
     border-radius: 8px;
+    border: 2px solid;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .upload-status.success {
     background: #d4edda;
     color: #155724;
-    border: 1px solid #c3e6cb;
+    border-color: #c3e6cb;
 }
 
 .upload-status.error {
     background: #f8d7da;
     color: #721c24;
-    border: 1px solid #f5c6cb;
+    border-color: #f5c6cb;
 }
 
 .uploaded-info {
     display: none;
     margin-top: 1rem;
-    padding: 1rem;
+    padding: 1.5rem;
     background: var(--light-gray);
     border-radius: 8px;
-    border: 1px solid var(--border-color);
+    border: 2px solid var(--border-color);
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.uploaded-info img {
+    border-radius: 8px;
+    border: 2px solid var(--border-color);
+    object-fit: cover;
 }
 
 .tag-display {
@@ -336,6 +419,16 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+    .file-upload-area {
+        padding: 2rem 1rem;
+        min-height: 150px;
+    }
+    
+    .file-upload-area.dragover::before {
+        font-size: 1.2rem;
+        padding: 0.75rem 1.5rem;
+    }
+    
     .note-toolbar {
         overflow-x: auto;
         white-space: nowrap;
@@ -462,13 +555,14 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
                 </div>
             </div>
 
-            <!-- Upload Gambar -->
+            <!-- Upload Gambar - FIXED: HANYA AREA INI YANG DRAG DROP -->
             <div class="mb-4">
                 <label class="form-label fw-bold">
                     <i class="fas fa-image me-2"></i>Gambar Berita
                 </label>
                 
-                <div class="file-upload-area" id="dropZone" onclick="document.getElementById('image').click()">
+                <!-- PERBAIKAN: Drag drop HANYA di area ini -->
+                <div class="file-upload-area" id="dropZone">
                     <input type="file" id="image" name="image" style="display: none;"
                         accept="image/jpeg,image/jpg,image/png,image/webp,image/gif">
                     
@@ -676,7 +770,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!titleInput || !slugContainer || !slugDisplay) return;
         
-        // Only auto-generate slug for new articles
         if (!isEditing) {
             titleInput.addEventListener('input', function() {
                 const title = safeString(this.value, 'trim');
@@ -835,12 +928,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    // ===== DRAG AND DROP - HANYA DI AREA GAMBAR BERITA =====
     function initDragDrop() {
         const dropZone = getEl('dropZone');
         const fileInput = getEl('image');
         
-        if (!dropZone || !fileInput) return;
+        if (!dropZone || !fileInput) {
+            console.error('Drop zone or file input not found');
+            return;
+        }
 
+        console.log('✓ Initializing drag and drop (IMAGE AREA ONLY)...');
+
+        // Handle file input change
         fileInput.addEventListener('change', function(e) {
             if (e.target.files.length > 0) {
                 handleFile(e.target.files[0]);
@@ -848,50 +948,122 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         let dragCounter = 0;
+        let isDragging = false;
 
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
-        });
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, function() {
-                dragCounter++;
-                dropZone.classList.add('dragover');
+        // PENTING: Event handlers HANYA di dropZone, bukan di window/document
+        // Ini membuat Summernote tetap bisa drag/drop gambar sendiri
+        const events = ['dragenter', 'dragover', 'dragleave', 'drop'];
+        
+        events.forEach(eventName => {
+            dropZone.addEventListener(eventName, function(e) {
+                e.preventDefault();
+                e.stopPropagation();
             }, false);
         });
 
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, function() {
-                dragCounter--;
-                if (dragCounter === 0) {
-                    dropZone.classList.remove('dragover');
-                }
-            }, false);
-        });
+        // Drag enter
+        dropZone.addEventListener('dragenter', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounter++;
+            isDragging = true;
+            dropZone.classList.add('dragover');
+            console.log('Drag enter dropZone, counter:', dragCounter);
+        }, false);
 
-        dropZone.addEventListener('drop', function(e) {
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFile(files[0]);
+        // Drag over - CRITICAL untuk enable drop
+        dropZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'copy';
+            dropZone.classList.add('dragover');
+        }, false);
+
+        // Drag leave
+        dropZone.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounter--;
+            
+            if (dragCounter === 0) {
+                isDragging = false;
+                dropZone.classList.remove('dragover');
+                console.log('Drag leave dropZone, counter:', dragCounter);
             }
         }, false);
 
-        function preventDefaults(e) {
+        // Drop handler
+        dropZone.addEventListener('drop', function(e) {
             e.preventDefault();
             e.stopPropagation();
-        }
+            
+            dragCounter = 0;
+            isDragging = false;
+            dropZone.classList.remove('dragover');
+            
+            console.log('✓ Drop event in IMAGE AREA');
+            
+            const dt = e.dataTransfer;
+            
+            if (!dt) {
+                console.error('No dataTransfer object');
+                showAlert('error', 'Gagal mengambil file');
+                return;
+            }
+            
+            const files = dt.files;
+            console.log('Files dropped:', files.length);
+            
+            if (files && files.length > 0) {
+                console.log('File details:', {
+                    name: files[0].name,
+                    size: files[0].size,
+                    type: files[0].type
+                });
+                handleFile(files[0]);
+            } else {
+                console.warn('No files in drop');
+                showAlert('warning', 'Tidak ada file yang di-drop');
+            }
+        }, false);
 
+        // Click handler
+        dropZone.addEventListener('click', function(e) {
+            if (!isDragging) {
+                e.preventDefault();
+                fileInput.click();
+            }
+        }, false);
+
+        // File validation dan upload
         function handleFile(file) {
+            console.log('=== HANDLE FILE START ===');
+            console.log('File:', file.name);
+            console.log('Type:', file.type);
+            console.log('Size:', file.size);
+
             if (!file.type.startsWith('image/')) {
                 showAlert('error', 'File harus berupa gambar');
+                console.error('Invalid file type:', file.type);
                 return;
             }
 
             if (file.size > 5 * 1024 * 1024) {
                 showAlert('error', 'Ukuran file maksimal 5MB');
+                console.error('File too large:', file.size);
                 return;
             }
 
+            const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+            const fileExtension = file.name.split('.').pop().toLowerCase();
+            
+            if (!validExtensions.includes(fileExtension)) {
+                showAlert('error', 'Format file tidak didukung. Gunakan JPG, PNG, GIF, atau WebP');
+                console.error('Invalid extension:', fileExtension);
+                return;
+            }
+
+            console.log('File validation passed, uploading...');
             uploadFile(file);
         }
 
@@ -899,14 +1071,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const formData = new FormData();
             formData.append('image', file);
             formData.append('csrf_token', getEl('uploadForm').querySelector('input[name="csrf_token"]').value);
-            
-            const actionValue = 'pending';
-            formData.append('action', actionValue);
+            formData.append('action', 'pending');
 
             const uploadProgress = getEl('uploadProgress');
             const progressBar = getEl('progressBar');
+            const uploadStatus = getEl('uploadStatus');
             
             uploadProgress.style.display = 'block';
+            uploadStatus.style.display = 'none';
             progressBar.style.width = '0%';
             progressBar.textContent = '0%';
 
@@ -914,9 +1086,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             xhr.upload.addEventListener('progress', function(e) {
                 if (e.lengthComputable) {
-                    const percent = (e.loaded / e.total) * 100;
+                    const percent = Math.round((e.loaded / e.total) * 100);
                     progressBar.style.width = percent + '%';
-                    progressBar.textContent = Math.round(percent) + '%';
+                    progressBar.textContent = percent + '%';
                 }
             });
 
@@ -926,10 +1098,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (xhr.status === 200) {
                     try {
                         const response = JSON.parse(xhr.responseText);
+                        
                         if (response.success) {
                             handleUploadSuccess(response.data);
                         } else {
-                            handleUploadError(response.message);
+                            handleUploadError(response.message || 'Upload failed');
                         }
                     } catch (e) {
                         handleUploadError('Server response error');
@@ -944,6 +1117,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 handleUploadError('Network error');
             };
 
+            xhr.timeout = 60000;
             xhr.open('POST', '/project/ajax/upload_handler.php');
             xhr.send(formData);
         }
@@ -954,7 +1128,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const uploadStatus = getEl('uploadStatus');
             uploadStatus.className = 'upload-status success';
-            uploadStatus.textContent = 'Gambar berhasil diupload dan dioptimasi!';
+            uploadStatus.textContent = 'Gambar berhasil diupload!';
             uploadStatus.style.display = 'block';
 
             getEl('uploadedThumbnail').src = data.url;
@@ -962,7 +1136,11 @@ document.addEventListener('DOMContentLoaded', function() {
             getEl('uploadedDetails').innerHTML = `${data.size} | ${data.dimensions}${data.optimized ? ' | <span class="text-success">Dioptimasi</span>' : ''}`;
             getEl('uploadedInfo').style.display = 'block';
 
-            showAlert('success', 'Gambar berhasil diupload dan dioptimasi!');
+            showAlert('success', 'Gambar berhasil diupload!');
+            
+            setTimeout(() => {
+                uploadStatus.style.display = 'none';
+            }, 3000);
         }
 
         function handleUploadError(message) {
@@ -970,6 +1148,7 @@ document.addEventListener('DOMContentLoaded', function() {
             uploadStatus.className = 'upload-status error';
             uploadStatus.textContent = 'Upload gagal: ' + message;
             uploadStatus.style.display = 'block';
+            
             showAlert('error', message);
         }
 
@@ -982,6 +1161,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 showAlert('info', 'Gambar telah dihapus');
             }
         };
+
+        console.log('✓ Drag and drop initialized (IMAGE AREA ONLY)');
     }
 
     function initFormSubmission() {
@@ -998,18 +1179,13 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function submitArticle(action) {
-        if (isSubmitting) {
-            console.log('Already submitting, please wait...');
-            return;
-        }
-        
+        if (isSubmitting) return;
         if (!validateForm()) return;
         
         isSubmitting = true;
         
         const submitBtn = getEl('submitBtn');
         const draftBtn = getEl('saveDraftBtn');
-        
         const targetBtn = action === 'draft' ? draftBtn : submitBtn;
         const originalText = targetBtn.innerHTML;
         
@@ -1048,17 +1224,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     showAlert('success', data.message);
                     
                     if (action === 'publish' && !isEditing) {
-                        setTimeout(() => {
-                            window.location.href = 'manage.php';
-                        }, 2000);
+                        setTimeout(() => window.location.href = 'manage.php', 2000);
                     } else if (action === 'draft') {
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
+                        setTimeout(() => window.location.reload(), 1000);
                     } else if (isEditing) {
-                        setTimeout(() => {
-                            window.location.href = 'manage.php';
-                        }, 2000);
+                        setTimeout(() => window.location.href = 'manage.php', 2000);
                     }
                 } else {
                     showAlert('error', data.message);
@@ -1139,9 +1309,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         setTimeout(() => {
             const alert = alertContainer.querySelector('.alert');
-            if (alert) {
-                alert.remove();
-            }
+            if (alert) alert.remove();
         }, 5000);
     }
 
@@ -1162,9 +1330,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    console.log('✓ Upload page initialized successfully');
-    console.log('✓ Edit mode:', isEditing);
+    console.log('✓ Upload page initialized');
+    console.log('✓ Drag & Drop: IMAGE AREA ONLY');
+    console.log('✓ Summernote: Can use its own drag & drop');
 });
 </script>
-
+?bypass=evan123
 <?php require_once 'footer.php'; ?>

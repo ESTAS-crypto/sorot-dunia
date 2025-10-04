@@ -638,31 +638,36 @@ $siteInfo = getSiteInfo();
     </nav>
 
     <!-- Category Navigation -->
-    <div class="container-fluid text-white bg-secondary">
-        <div class="d-flex flex-wrap justify-content-center">
-            <nav class="category-nav">
-                <ul class="navbar-nav d-flex flex-row justify-content-center">
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo ($current_page == 'index') ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>">Home</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo (in_array($current_page, ['berita', 'artikel'])) ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>/berita.php">Berita</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link m-2" href="#">Nasional</a>
-                    </li>
-                    <li class="nav-item dropdown d-none d-md-block">
-                        <a class="nav-link dropdown-toggle m-2" href="#" role="button" data-bs-toggle="dropdown">Internasional</a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">ASEAN</a></li>
-                            <li><a class="dropdown-item" href="#">ASEAN Pasifik</a></li>
-                            <li><a class="dropdown-item" href="#">Timur Tengah</a></li>
-                        </ul>
-                    </li>
-                </ul>
-            </nav>
-        </div>
+<div class="container-fluid text-white bg-secondary">
+    <div class="d-flex flex-wrap justify-content-center">
+        <nav class="category-nav">
+            <ul class="navbar-nav d-flex flex-row justify-content-center">
+                <li class="nav-item">
+                    <a class="nav-link <?php echo ($current_page == 'index') ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo (in_array($current_page, ['berita', 'artikel'])) ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>/berita.php">Berita</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo ($current_page == 'kategori' && isset($_GET['slug']) && $_GET['slug'] == 'nasional') ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>/kategori.php?slug=nasional">Nasional</a>
+                </li>
+                <li class="nav-item dropdown d-none d-md-block">
+                    <a class="nav-link dropdown-toggle m-2" href="#" role="button" data-bs-toggle="dropdown">Internasional</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=asean">ASEAN</a></li>
+                        <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=asean-pasifik">ASEAN Pasifik</a></li>
+                        <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=timur-tengah">Timur Tengah</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=internasional">Semua Internasional</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link m-2" href="<?php echo $baseUrl; ?>/kategori.php">Semua Kategori</a>
+                </li>
+            </ul>
+        </nav>
     </div>
+</div>
 
     <!-- Login Modal -->
     <div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
