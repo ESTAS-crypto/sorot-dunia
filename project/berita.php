@@ -1,5 +1,5 @@
 <?php
-// berita.php - FIXED VERSION dengan koneksi database yang benar
+// berita.php - FIXED VERSION dengan Hero Carousel yang diperbaiki
 ob_start();
 
 // Include konfigurasi database
@@ -206,7 +206,7 @@ ob_end_flush();
 
     <div class="row">
         <div class="col-lg-8">
-            <!-- Hero Carousel -->
+            <!-- Hero Carousel - PERBAIKAN LENGKAP -->
             <div id="heroCarousel" class="carousel slide" data-bs-ride="carousel" data-bs-interval="5000">
                 <div class="carousel-inner">
                     <?php 
@@ -223,7 +223,9 @@ ob_end_flush();
                                 $carousel_article['is_external']
                             );
                     ?>
-                    <div class="carousel-item <?php echo $carousel_active; ?>">
+                    <div class="carousel-item <?php echo $carousel_active; ?>"
+                         onclick="window.location.href='artikel.php?id=<?php echo $carousel_article['article_id']; ?>'"
+                         style="cursor: pointer;">
                         <?php if ($carousel_image): ?>
                         <img src="<?php echo htmlspecialchars($carousel_image); ?>" 
                              class="d-block w-100" 
@@ -240,8 +242,6 @@ ob_end_flush();
                             <h5><?php echo htmlspecialchars(mb_substr($carousel_article['title'], 0, 100)); ?><?php echo mb_strlen($carousel_article['title']) > 100 ? '...' : ''; ?></h5>
                             <p><?php echo htmlspecialchars($carousel_article['category_name'] ?? 'Berita'); ?> • 
                                <?php echo date('d M Y', strtotime($carousel_article['publication_date'])); ?></p>
-                            <a href="artikel.php?id=<?php echo $carousel_article['article_id']; ?>" 
-                               class="btn btn-primary btn-sm">Baca Selengkapnya</a>
                         </div>
                     </div>
                     <?php endwhile; } ?>
@@ -267,11 +267,11 @@ ob_end_flush();
                 
                 <!-- Carousel Controls -->
                 <?php if ($carousel_count > 1): ?>
-                <button class="carousel-control-prev" type="button" data-bs-target="#heroCarousel" data-bs-slide="prev">
+                <button class="carousel-control-prev" type="button" data-bs-target="#heroCarousel" data-bs-slide="prev" onclick="event.stopPropagation();">
                     <span class="carousel-control-prev-icon" aria-hidden="true"></span>
                     <span class="visually-hidden">Kembali</span>
                 </button>
-                <button class="carousel-control-next" type="button" data-bs-target="#heroCarousel" data-bs-slide="next">
+                <button class="carousel-control-next" type="button" data-bs-target="#heroCarousel" data-bs-slide="next" onclick="event.stopPropagation();">
                     <span class="carousel-control-next-icon" aria-hidden="true"></span>
                     <span class="visually-hidden">Lanjut</span>
                 </button>
@@ -485,11 +485,6 @@ ob_end_flush();
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     transform: translateY(-1px);
     transition: all 0.2s ease;
-}
-
-.carousel-caption {
-    background: linear-gradient(transparent, rgba(0,0,0,0.8));
-    border-radius: 0 0 10px 10px;
 }
 
 .badge {

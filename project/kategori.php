@@ -1,5 +1,5 @@
 <?php
-// kategori.php - FIXED VERSION dengan image handling yang robust
+// kategori.php - FIXED VERSION dengan Artikel Terbaru
 ob_start();
 
 require 'config/config.php';
@@ -10,24 +10,25 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require 'header.php';
 
-// Get category dari URL - support both slug and ID
+// Get category dari URL
 $category_slug = isset($_GET['slug']) ? sanitize_input($_GET['slug']) : '';
 $category_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-// Pagination setup
+// Pagination
 $articles_per_page = 12;
 $current_page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $offset = ($current_page - 1) * $articles_per_page;
 
-// Variables untuk data
+// Variables
 $category_info = null;
 $articles = [];
 $total_articles = 0;
 $total_pages = 1;
 $all_categories = [];
+$latest_articles = []; // TAMBAHAN UNTUK ARTIKEL TERBARU
 
 try {
-    // Get category info - prioritas slug, fallback ke ID
+    // Get category info
     if (!empty($category_slug)) {
         $category_query = "SELECT * FROM categories WHERE slug = ? LIMIT 1";
         $stmt = mysqli_prepare($koneksi, $category_query);
@@ -53,9 +54,9 @@ try {
         mysqli_stmt_close($stmt);
     }
     
-    // Jika kategori ditemukan, ambil artikelnya
+    // Get articles jika kategori ditemukan
     if ($category_info) {
-        // Count total articles in this category
+        // Count total articles
         $count_query = "SELECT COUNT(*) as total 
                        FROM articles a 
                        WHERE a.category_id = ? 
@@ -73,7 +74,7 @@ try {
         }
         mysqli_stmt_close($stmt);
         
-        // Get articles for this category dengan IMPROVED image handling
+        // Get articles
         $articles_query = "SELECT 
                             a.article_id,
                             a.title,
@@ -84,11 +85,9 @@ try {
                             u.username as author_username,
                             c.name as category_name,
                             c.slug as category_slug,
-                            i.id as image_id,
                             i.filename as image_filename,
                             i.url as image_url,
-                            i.is_external,
-                            i.mime as image_mime
+                            i.is_external
                           FROM articles a
                           LEFT JOIN users u ON a.author_id = u.id
                           LEFT JOIN categories c ON a.category_id = c.category_id
@@ -105,17 +104,14 @@ try {
         
         if ($articles_result) {
             while ($row = mysqli_fetch_assoc($articles_result)) {
-                // PERBAIKAN UTAMA: Handle image path dengan logic yang sama seperti index.php
+                // Handle image path
                 if (!empty($row['image_filename'])) {
                     if ($row['is_external'] && !empty($row['image_url'])) {
-                        // Gambar eksternal
                         $row['display_image'] = $row['image_url'];
                     } else {
-                        // Gambar lokal - cek berbagai kemungkinan path
                         $possible_paths = [
                             'uploads/articles/published/' . $row['image_filename'],
                             'uploads/articles/' . $row['image_filename'],
-                            'Uplod_berita/uploads/articles/' . $row['image_filename'],
                             $row['image_filename']
                         ];
                         
@@ -127,14 +123,10 @@ try {
                             }
                         }
                         
-                        // Fallback ke image_url jika file tidak ditemukan
                         if (!$row['display_image'] && !empty($row['image_url'])) {
                             $row['display_image'] = $row['image_url'];
                         }
                     }
-                } else if (!empty($row['image_url'])) {
-                    // Hanya ada URL tanpa filename
-                    $row['display_image'] = $row['image_url'];
                 } else {
                     $row['display_image'] = null;
                 }
@@ -145,7 +137,27 @@ try {
         mysqli_stmt_close($stmt);
     }
     
-    // Get all categories dengan article count
+    // ===== GET LATEST ARTICLES (ARTIKEL TERBARU) =====
+    $latest_query = "SELECT 
+                        a.article_id,
+                        a.title,
+                        a.publication_date,
+                        c.name as category_name,
+                        c.slug as category_slug
+                    FROM articles a
+                    LEFT JOIN categories c ON a.category_id = c.category_id
+                    WHERE a.article_status = 'published'
+                    ORDER BY a.publication_date DESC
+                    LIMIT 5";
+    
+    $latest_result = mysqli_query($koneksi, $latest_query);
+    if ($latest_result && mysqli_num_rows($latest_result) > 0) {
+        while ($latest = mysqli_fetch_assoc($latest_result)) {
+            $latest_articles[] = $latest;
+        }
+    }
+    
+    // Get all categories
     $all_categories_query = "SELECT 
                               c.category_id,
                               c.name,
@@ -180,7 +192,6 @@ function truncateText($text, $length = 150) {
 ob_end_flush();
 ?>
 
-<!-- Custom CSS -->
 <style>
 .category-header {
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
@@ -223,12 +234,7 @@ ob_end_flush();
     height: 100%;
     width: 100%;
     object-fit: cover;
-    transition: transform 0.3s ease, opacity 0.3s ease;
-    opacity: 0;
-}
-
-.card-img-top.loaded {
-    opacity: 1;
+    transition: transform 0.3s ease;
 }
 
 .article-card:hover .card-img-top {
@@ -314,38 +320,6 @@ ob_end_flush();
     background: white;
 }
 
-.pagination .page-link {
-    color: #007bff;
-    border-color: #dee2e6;
-    padding: 8px 12px;
-}
-
-.pagination .page-item.active .page-link {
-    background-color: #007bff;
-    border-color: #007bff;
-}
-
-.pagination .page-link:hover {
-    background-color: #e9ecef;
-    border-color: #dee2e6;
-    color: #0056b3;
-}
-
-.breadcrumb {
-    background-color: transparent;
-    padding: 0;
-    margin: 0;
-}
-
-.breadcrumb-item a {
-    color: #6c757d;
-    text-decoration: none;
-}
-
-.breadcrumb-item a:hover {
-    color: #007bff;
-}
-
 .trending-item {
     transition: background-color 0.2s ease;
     border-radius: 6px;
@@ -378,6 +352,49 @@ ob_end_flush();
     font-size: 13px;
     font-weight: 500;
     flex: 1;
+}
+
+.trending-content a {
+    color: #333;
+    text-decoration: none;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.trending-content a:hover {
+    color: #007bff;
+}
+
+.pagination .page-link {
+    color: #007bff;
+    border-color: #dee2e6;
+    padding: 8px 12px;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.pagination .page-link:hover {
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+    color: #0056b3;
+}
+
+.breadcrumb {
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+}
+
+.breadcrumb-item a {
+    color: #6c757d;
+    text-decoration: none;
+}
+
+.breadcrumb-item a:hover {
+    color: #007bff;
 }
 
 @media (max-width: 768px) {
@@ -449,7 +466,7 @@ ob_end_flush();
             </div>
 
             <?php if ($category_info): ?>
-            <!-- Articles Grid for Specific Category -->
+            <!-- Articles Grid -->
             <?php if (!empty($articles)): ?>
             <div class="articles-grid">
                 <div class="row">
@@ -457,14 +474,13 @@ ob_end_flush();
                     <div class="col-md-6 col-lg-6 mb-4">
                         <article class="article-card h-100">
                             <div class="card h-100 shadow-sm hover-shadow">
-                                <!-- Image Display dengan Improved Error Handling -->
+                                <!-- Image Display -->
                                 <?php if (!empty($article['display_image'])): ?>
                                 <div class="card-img-top-wrapper">
                                     <img src="<?php echo htmlspecialchars($article['display_image']); ?>" 
                                          class="card-img-top" 
                                          alt="<?php echo htmlspecialchars($article['title']); ?>"
                                          loading="lazy"
-                                         onload="this.classList.add('loaded')"
                                          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                                     <div class="image-overlay">
                                         <span class="badge bg-primary">
@@ -475,7 +491,7 @@ ob_end_flush();
                                 </div>
                                 <?php endif; ?>
                                 
-                                <!-- Placeholder jika tidak ada gambar atau error -->
+                                <!-- Placeholder -->
                                 <div class="placeholder-image <?php echo empty($article['display_image']) ? 'd-flex' : 'd-none'; ?>">
                                     <i class="fas fa-newspaper fa-3x text-muted mb-2"></i>
                                     <small>Gambar tidak tersedia</small>
@@ -535,37 +551,13 @@ ob_end_flush();
                         $start_page = max(1, $current_page - 2);
                         $end_page = min($total_pages, $current_page + 2);
                         
-                        if ($start_page > 1): ?>
-                            <li class="page-item">
-                                <a class="page-link" href="?slug=<?php echo urlencode($category_info['slug']); ?>&page=1">1</a>
-                            </li>
-                            <?php if ($start_page > 2): ?>
-                            <li class="page-item disabled">
-                                <span class="page-link">...</span>
-                            </li>
-                            <?php endif; ?>
-                        <?php endif; ?>
-
-                        <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                        for ($i = $start_page; $i <= $end_page; $i++): ?>
                         <li class="page-item <?php echo $i === $current_page ? 'active' : ''; ?>">
                             <a class="page-link" href="?slug=<?php echo urlencode($category_info['slug']); ?>&page=<?php echo $i; ?>">
                                 <?php echo $i; ?>
                             </a>
                         </li>
                         <?php endfor; ?>
-
-                        <?php if ($end_page < $total_pages): ?>
-                            <?php if ($end_page < $total_pages - 1): ?>
-                            <li class="page-item disabled">
-                                <span class="page-link">...</span>
-                            </li>
-                            <?php endif; ?>
-                            <li class="page-item">
-                                <a class="page-link" href="?slug=<?php echo urlencode($category_info['slug']); ?>&page=<?php echo $total_pages; ?>">
-                                    <?php echo $total_pages; ?>
-                                </a>
-                            </li>
-                        <?php endif; ?>
 
                         <?php if ($current_page < $total_pages): ?>
                         <li class="page-item">
@@ -580,11 +572,11 @@ ob_end_flush();
 
             </div>
             <?php else: ?>
-            <!-- No Articles Found -->
+            <!-- No Articles -->
             <div class="alert alert-info text-center py-5">
                 <i class="fas fa-info-circle fa-3x mb-3 text-info"></i>
                 <h4>Belum Ada Artikel</h4>
-                <p class="mb-0">Belum ada artikel yang dipublikasikan dalam kategori <strong><?php echo htmlspecialchars($category_info['name']); ?></strong>.</p>
+                <p class="mb-0">Belum ada artikel dalam kategori <strong><?php echo htmlspecialchars($category_info['name']); ?></strong>.</p>
                 <div class="mt-3">
                     <a href="berita.php" class="btn btn-primary">
                         <i class="fas fa-arrow-left me-2"></i>Kembali ke Berita
@@ -611,10 +603,6 @@ ob_end_flush();
                                         <i class="fas fa-newspaper me-1"></i>
                                         <?php echo number_format($cat['article_count']); ?> artikel
                                     </p>
-                                    <p class="text-muted small mb-3">
-                                        <i class="fas fa-calendar me-1"></i>
-                                        Dibuat: <?php echo date('d M Y', strtotime($cat['created_at'])); ?>
-                                    </p>
                                     <a href="kategori.php?slug=<?php echo urlencode($cat['slug']); ?>" 
                                        class="btn btn-outline-primary">
                                         <i class="fas fa-eye me-2"></i>Lihat Artikel
@@ -625,13 +613,6 @@ ob_end_flush();
                     </div>
                     <?php endforeach; ?>
                 </div>
-            </div>
-            <?php else: ?>
-            <!-- No Categories -->
-            <div class="alert alert-warning text-center py-5">
-                <i class="fas fa-exclamation-triangle fa-3x mb-3 text-warning"></i>
-                <h4>Belum Ada Kategori</h4>
-                <p class="mb-0">Belum ada kategori yang tersedia saat ini.</p>
             </div>
             <?php endif; ?>
             <?php endif; ?>
@@ -667,50 +648,36 @@ ob_end_flush();
                 </div>
             </div>
 
-            <!-- Latest Articles Across All Categories -->
+            <!-- ===== ARTIKEL TERBARU (DITAMBAHKAN KEMBALI) ===== -->
             <div class="sidebar mt-3">
                 <div class="sidebar-header">
                     <i class="fas fa-newspaper me-2"></i>Artikel Terbaru
                 </div>
                 <div class="p-3">
-                    <?php
-                    $latest_query = "SELECT 
-                                        a.article_id,
-                                        a.title,
-                                        a.publication_date,
-                                        c.name as category_name,
-                                        c.slug as category_slug
-                                    FROM articles a
-                                    LEFT JOIN categories c ON a.category_id = c.category_id
-                                    WHERE a.article_status = 'published'
-                                    ORDER BY a.publication_date DESC
-                                    LIMIT 5";
-                    
-                    $latest_result = mysqli_query($koneksi, $latest_query);
-                    if ($latest_result && mysqli_num_rows($latest_result) > 0):
-                        $counter = 1;
-                        while ($latest = mysqli_fetch_assoc($latest_result)):
-                    ?>
-                    <div class="trending-item">
-                        <div class="trending-number"><?php echo $counter; ?></div>
-                        <div class="trending-content">
-                            <a href="artikel.php?id=<?php echo $latest['article_id']; ?>" 
-                               class="text-decoration-none">
-                                <?php echo htmlspecialchars($latest['title']); ?>
-                            </a>
-                            <div class="text-muted small mt-1">
-                                <i class="fas fa-calendar me-1"></i>
-                                <?php echo date('d M Y', strtotime($latest['publication_date'])); ?>
-                                <?php if ($latest['category_name']): ?>
-                                • <i class="fas fa-folder me-1"></i>
-                                <a href="kategori.php?slug=<?php echo urlencode($latest['category_slug']); ?>" class="text-decoration-none">
-                                    <?php echo htmlspecialchars($latest['category_name']); ?>
+                    <?php if (!empty($latest_articles)): ?>
+                        <?php $counter = 1; ?>
+                        <?php foreach ($latest_articles as $latest): ?>
+                        <div class="trending-item">
+                            <div class="trending-number"><?php echo $counter; ?></div>
+                            <div class="trending-content">
+                                <a href="artikel.php?id=<?php echo $latest['article_id']; ?>">
+                                    <?php echo htmlspecialchars($latest['title']); ?>
                                 </a>
-                                <?php endif; ?>
+                                <div class="text-muted small mt-1">
+                                    <i class="fas fa-calendar me-1"></i>
+                                    <?php echo date('d M Y', strtotime($latest['publication_date'])); ?>
+                                    <?php if ($latest['category_name']): ?>
+                                    • <i class="fas fa-folder me-1"></i>
+                                    <a href="kategori.php?slug=<?php echo urlencode($latest['category_slug']); ?>" 
+                                       class="text-decoration-none text-muted">
+                                        <?php echo htmlspecialchars($latest['category_name']); ?>
+                                    </a>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <?php $counter++; endwhile; ?>
+                        <?php $counter++; ?>
+                        <?php endforeach; ?>
                     <?php else: ?>
                     <div class="text-center text-muted py-3">
                         <i class="fas fa-newspaper fa-2x mb-2"></i>
@@ -748,10 +715,9 @@ ob_end_flush();
     </div>
 </div>
 
-<!-- JavaScript Enhancement -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Category page loaded with fixed image handling');
+    console.log('Category page loaded with Latest Articles widget');
     
     <?php if ($category_info): ?>
     console.log('Category:', '<?php echo addslashes($category_info['name']); ?>');
@@ -759,51 +725,20 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Articles found:', <?php echo $total_articles; ?>);
     <?php endif; ?>
     
-    // Handle image loading dengan improved error handling
-    const images = document.querySelectorAll('.card-img-top');
-    console.log('Total images to handle:', images.length);
+    console.log('Latest articles:', <?php echo count($latest_articles); ?>);
     
+    // Handle image loading
+    const images = document.querySelectorAll('.card-img-top');
     images.forEach((img, index) => {
-        // Set initial state
-        img.style.opacity = '0';
-        img.style.transition = 'opacity 0.3s ease';
-        
-        // Handle successful load
-        img.addEventListener('load', function() {
-            this.style.opacity = '1';
-            this.classList.add('loaded');
-        });
-        
-        // Handle error - sudah di-handle di onError inline
         img.addEventListener('error', function() {
             console.warn(`Image ${index + 1} failed to load:`, this.src);
-        });
-        
-        // Fallback timeout - jika gambar tidak load dalam 10 detik
-        setTimeout(() => {
-            if (!img.classList.contains('loaded') && img.complete) {
-                if (img.naturalHeight === 0) {
-                    console.error(`Image ${index + 1} timeout - triggering error handler`);
-                    img.style.display = 'none';
-                    const placeholder = img.nextElementSibling;
-                    if (placeholder && placeholder.classList.contains('placeholder-image')) {
-                        placeholder.style.display = 'flex';
-                    }
-                }
+            this.style.display = 'none';
+            const placeholder = this.nextElementSibling;
+            if (placeholder && placeholder.classList.contains('placeholder-image')) {
+                placeholder.style.display = 'flex';
             }
-        }, 10000);
-    });
-    
-    // Smooth scroll for pagination
-    const paginationLinks = document.querySelectorAll('.pagination .page-link');
-    paginationLinks.forEach(link => {
-        link.addEventListener('click', function() {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
         });
     });
-    
-    // Log completion
-    console.log('Category page initialization complete');
 });
 </script>
 

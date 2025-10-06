@@ -1,5 +1,5 @@
 <?php
-// search.php - Complete Search Functionality with Fixed Image Display
+// search.php - FIXED VERSION dengan Image Display yang Konsisten
 ob_start();
 
 require 'config/config.php';
@@ -23,6 +23,45 @@ $articles = [];
 $total_articles = 0;
 $total_pages = 1;
 $categories = [];
+
+// ============================================
+// FUNCTION HELPER UNTUK IMAGE DISPLAY - PERBAIKAN UTAMA
+// ============================================
+function getArticleImageDisplay($image_data) {
+    if (empty($image_data['image_filename'])) {
+        return null;
+    }
+    
+    // CRITICAL FIX: Prioritaskan URL dari database
+    if (!empty($image_data['image_url'])) {
+        // Cek apakah URL valid
+        if ($image_data['is_external'] || filter_var($image_data['image_url'], FILTER_VALIDATE_URL)) {
+            return $image_data['image_url'];
+        }
+    }
+    
+    // Fallback: Cari file di berbagai folder
+    $filename = $image_data['image_filename'];
+    $base_url = 'https://inievan.my.id/project';
+    
+    // Prioritas folder (published dulu karena artikel di search sudah published)
+    $folder_priority = ['published', 'pending', 'draft', 'rejected'];
+    
+    foreach ($folder_priority as $folder) {
+        $file_path = __DIR__ . '/uploads/articles/' . $folder . '/' . $filename;
+        
+        if (file_exists($file_path)) {
+            return $base_url . '/uploads/articles/' . $folder . '/' . $filename;
+        }
+    }
+    
+    // Last resort: gunakan URL dari database
+    if (!empty($image_data['image_url'])) {
+        return $image_data['image_url'];
+    }
+    
+    return null;
+}
 
 try {
     if (!empty($search_query)) {
@@ -53,7 +92,7 @@ try {
         }
         mysqli_stmt_close($stmt);
         
-        // Get matching articles with full details - PERBAIKAN QUERY UNTUK IMAGE
+        // Get matching articles - QUERY YANG DIPERBAIKI
         $articles_query = "SELECT DISTINCT
                             a.article_id,
                             a.title,
@@ -61,6 +100,7 @@ try {
                             a.meta_description,
                             a.publication_date,
                             a.view_count,
+                            a.article_status,
                             u.full_name as author_name,
                             u.username as author_username,
                             c.name as category_name,
@@ -85,9 +125,9 @@ try {
                                OR u.full_name LIKE ?
                                OR t.name LIKE ?)
                           GROUP BY a.article_id, a.title, a.content, a.meta_description, 
-                                   a.publication_date, a.view_count, u.full_name, u.username,
-                                   c.name, c.category_id, i.id, i.filename, i.url, 
-                                   i.is_external, i.mime
+                                   a.publication_date, a.view_count, a.article_status,
+                                   u.full_name, u.username, c.name, c.category_id, 
+                                   i.id, i.filename, i.url, i.is_external, i.mime
                           ORDER BY a.publication_date DESC
                           LIMIT ? OFFSET ?";
         
@@ -98,38 +138,12 @@ try {
         
         if ($articles_result) {
             while ($row = mysqli_fetch_assoc($articles_result)) {
-                // PERBAIKAN: Logic image handling yang sama seperti di index.php
+                // CRITICAL: Gunakan helper function untuk image display
+                $row['display_image'] = getArticleImageDisplay($row);
+                
+                // Debug logging (bisa dihapus di production)
                 if (!empty($row['image_filename'])) {
-                    if ($row['is_external'] && !empty($row['image_url'])) {
-                        // Gambar eksternal
-                        $row['display_image'] = $row['image_url'];
-                    } else {
-                        // Gambar lokal - cek berbagai kemungkinan path
-                        $possible_paths = [
-                            'uploads/articles/published/' . $row['image_filename'],
-                            'uploads/articles/' . $row['image_filename'],
-                            'Uplod_berita/uploads/articles/' . $row['image_filename'],
-                            $row['image_filename']
-                        ];
-                        
-                        $row['display_image'] = null;
-                        foreach ($possible_paths as $path) {
-                            if (file_exists($path)) {
-                                $row['display_image'] = $path;
-                                break;
-                            }
-                        }
-                        
-                        // Fallback ke image_url jika file tidak ditemukan
-                        if (!$row['display_image'] && !empty($row['image_url'])) {
-                            $row['display_image'] = $row['image_url'];
-                        }
-                    }
-                } else if (!empty($row['image_url'])) {
-                    // Hanya ada URL tanpa filename
-                    $row['display_image'] = $row['image_url'];
-                } else {
-                    $row['display_image'] = null;
+                    error_log("Search Image - Article {$row['article_id']}: File={$row['image_filename']}, DB_URL={$row['image_url']}, Display={$row['display_image']}");
                 }
                 
                 $articles[] = $row;
@@ -176,240 +190,7 @@ function highlightSearchTerm($text, $search_query) {
 ob_end_flush();
 ?>
 
-<!-- Custom CSS - Mirip dengan index.php -->
-<style>
-/* Search Page Specific Styles */
-.search-header {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border-radius: 10px;
-    padding: 20px;
-    border-left: 4px solid #007bff;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.search-title {
-    color: #333;
-    font-weight: 700;
-    margin-bottom: 10px;
-}
-
-.search-box {
-    background: white;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
-}
-
-.search-form-large .input-group {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.search-form-large .form-control {
-    border: 2px solid #e9ecef;
-    padding: 12px 20px;
-}
-
-.search-form-large .form-control:focus {
-    border-color: #007bff;
-    box-shadow: none;
-}
-
-/* Article Cards - Same as index.php */
-.article-card {
-    transition: all 0.3s ease;
-    cursor: pointer;
-}
-
-.article-card .card {
-    transition: all 0.3s ease;
-    border: none;
-    border-radius: 12px;
-    overflow: hidden;
-    height: 100%;
-}
-
-.article-card .card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
-}
-
-.card-img-top-wrapper {
-    position: relative;
-    overflow: hidden;
-    height: 200px;
-    background: #f8f9fa;
-}
-
-.card-img-top {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform 0.3s ease;
-}
-
-.article-card:hover .card-img-top {
-    transform: scale(1.05);
-}
-
-.placeholder-image {
-    height: 200px;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.image-overlay {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    z-index: 10;
-}
-
-.article-title {
-    font-size: 1.1rem;
-    line-height: 1.4;
-    margin-bottom: 10px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.article-title a {
-    transition: color 0.2s ease;
-}
-
-.article-title a:hover {
-    color: #007bff !important;
-    text-decoration: underline !important;
-}
-
-.article-meta {
-    font-size: 0.85em;
-}
-
-.article-tags .badge {
-    font-size: 0.75em;
-    font-weight: normal;
-}
-
-.card-text {
-    font-size: 0.9rem;
-    line-height: 1.5;
-    color: #6c757d;
-}
-
-/* Highlight Search Term */
-mark {
-    background-color: #fff3cd;
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-weight: 600;
-}
-
-/* Empty State */
-.empty-search-state {
-    background: white;
-    border-radius: 10px;
-    padding: 40px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.search-suggestions ul li {
-    padding: 5px 0;
-    text-align: left;
-}
-
-.popular-searches .btn {
-    margin: 5px;
-}
-
-/* Sidebar */
-.sidebar {
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    border-radius: 8px;
-    overflow: hidden;
-    background: white;
-}
-
-.sidebar-header {
-    background: linear-gradient(135deg, #6c757d, #495057);
-    color: white;
-    padding: 12px 15px;
-    border-radius: 8px 8px 0 0;
-    font-weight: bold;
-}
-
-.hover-item {
-    transition: all 0.2s ease;
-}
-
-.hover-item:hover {
-    background-color: #e9ecef !important;
-    transform: translateX(5px);
-}
-
-/* Pagination */
-.pagination .page-link {
-    color: #007bff;
-    border-color: #dee2e6;
-    padding: 8px 12px;
-}
-
-.pagination .page-item.active .page-link {
-    background-color: #007bff;
-    border-color: #007bff;
-}
-
-.pagination .page-link:hover {
-    background-color: #e9ecef;
-    border-color: #dee2e6;
-    color: #0056b3;
-}
-
-/* Breadcrumb */
-.breadcrumb {
-    background-color: transparent;
-    padding: 0;
-    margin: 0 0 15px 0;
-}
-
-.breadcrumb-item a {
-    color: #6c757d;
-    text-decoration: none;
-}
-
-.breadcrumb-item a:hover {
-    color: #007bff;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .search-header {
-        padding: 15px;
-    }
-    
-    .card-img-top-wrapper {
-        height: 180px;
-    }
-    
-    .search-title {
-        font-size: 1.5rem;
-    }
-    
-    .empty-search-state {
-        padding: 30px 15px;
-    }
-    
-    .article-card .card {
-        margin-bottom: 15px;
-    }
-}
-</style>
+<link rel="stylesheet" href="style/berita.css">
 
 <div class="container main-content mt-3">
     <div class="row">
@@ -440,27 +221,6 @@ mark {
                 <?php endif; ?>
             </div>
 
-            <!-- Search Form -->
-            <div class="search-box">
-                <form method="GET" action="search.php" class="search-form-large">
-                    <div class="input-group input-group-lg">
-                        <input type="search" 
-                               name="q" 
-                               class="form-control" 
-                               placeholder="Cari berita, kategori, penulis, atau tag..." 
-                               value="<?php echo htmlspecialchars($search_query); ?>"
-                               autofocus>
-                        <button class="btn btn-primary" type="submit">
-                            <i class="fas fa-search me-1"></i> Cari
-                        </button>
-                    </div>
-                    <small class="form-text text-muted mt-2 d-block">
-                        <i class="fas fa-info-circle"></i> 
-                        Tips: Cari berdasarkan judul, konten, kategori, nama penulis, atau tag
-                    </small>
-                </form>
-            </div>
-
             <!-- Search Results -->
             <?php if (!empty($search_query)): ?>
                 <?php if (!empty($articles)): ?>
@@ -470,14 +230,20 @@ mark {
                         <div class="col-md-6 mb-4">
                             <article class="article-card h-100">
                                 <div class="card shadow-sm hover-shadow">
-                                    <!-- Image Display - PERBAIKAN -->
+                                    <!-- Image Display - PERBAIKAN LENGKAP -->
                                     <?php if (!empty($article['display_image'])): ?>
                                     <div class="card-img-top-wrapper">
                                         <img src="<?php echo htmlspecialchars($article['display_image']); ?>" 
                                              class="card-img-top" 
                                              alt="<?php echo htmlspecialchars($article['title']); ?>"
                                              loading="lazy"
-                                             onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                        
+                                        <!-- Placeholder fallback -->
+                                        <div class="placeholder-image" style="display: none;">
+                                            <i class="fas fa-newspaper fa-3x text-muted"></i>
+                                        </div>
+                                        
                                         <div class="image-overlay">
                                             <span class="badge bg-primary">
                                                 <i class="fas fa-eye me-1"></i>
@@ -485,12 +251,14 @@ mark {
                                             </span>
                                         </div>
                                     </div>
-                                    <?php endif; ?>
-                                    
-                                    <!-- Placeholder jika gambar tidak ada atau error -->
-                                    <div class="placeholder-image <?php echo !empty($article['display_image']) ? 'd-none' : 'd-flex'; ?> align-items-center justify-content-center">
-                                        <i class="fas fa-newspaper fa-3x text-muted"></i>
+                                    <?php else: ?>
+                                    <!-- No image -->
+                                    <div class="card-img-top-wrapper">
+                                        <div class="placeholder-image" style="display: flex;">
+                                            <i class="fas fa-newspaper fa-3x text-muted"></i>
+                                        </div>
                                     </div>
+                                    <?php endif; ?>
 
                                     <div class="card-body d-flex flex-column">
                                         <div class="article-meta mb-2">
@@ -719,43 +487,5 @@ mark {
         </div>
     </div>
 </div>
-
-<!-- JavaScript Enhancement -->
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Search page loaded');
-    
-    const searchQuery = "<?php echo addslashes($search_query); ?>";
-    if (searchQuery) {
-        console.log('Search performed for:', searchQuery);
-        console.log('Results found:', <?php echo $total_articles; ?>);
-    }
-    
-    // Handle image loading
-    const images = document.querySelectorAll('.card-img-top');
-    images.forEach(img => {
-        img.style.opacity = '0';
-        img.style.transition = 'opacity 0.3s ease';
-        
-        img.addEventListener('load', function() {
-            this.style.opacity = '1';
-            console.log('Image loaded:', this.src);
-        });
-        
-        img.addEventListener('error', function() {
-            console.warn('Image failed to load:', this.src);
-            // Fallback sudah di-handle di HTML dengan onerror
-        });
-    });
-    
-    // Smooth scroll for pagination
-    const paginationLinks = document.querySelectorAll('.pagination .page-link');
-    paginationLinks.forEach(link => {
-        link.addEventListener('click', function() {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
-    });
-});
-</script>
 
 <?php require 'footer.php'; ?>

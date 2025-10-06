@@ -1,5 +1,5 @@
 <?php
-// index.php - Tidak perlu perubahan, sudah menggunakan header.php dan footer.php yang baru
+// index.php - FIXED VERSION dengan Hero Carousel yang diperbaiki
 ob_start();
 
 // Include header (yang sudah include config.php dan modal login/register)
@@ -167,18 +167,20 @@ ob_end_flush();
 
     <div class="row">
         <div class="col-lg-8">
-            <!-- Hero Carousel -->
+            <!-- Hero Carousel - PERBAIKAN LENGKAP -->
             <?php if (!empty($articles)): ?>
             <div id="heroCarousel" class="carousel slide" data-bs-ride="carousel" data-bs-interval="5000">
                 <div class="carousel-inner">
                     <?php for ($i = 0; $i < min(3, count($articles)); $i++): ?>
                     <?php $article = $articles[$i]; ?>
-                    <div class="carousel-item <?php echo $i === 0 ? 'active' : ''; ?>">
+                    <div class="carousel-item <?php echo $i === 0 ? 'active' : ''; ?>" 
+                         onclick="window.location.href='artikel.php?id=<?php echo $article['article_id']; ?>'"
+                         style="cursor: pointer;">
                         <?php if (!empty($article['display_image'])): ?>
                         <img src="<?php echo htmlspecialchars($article['display_image']); ?>" 
                              class="d-block w-100" 
                              alt="<?php echo htmlspecialchars($article['title']); ?>"
-                             onerror="this.onerror=null; this.src='img/placeholder-news.jpg'; this.style.objectFit='cover';">
+                             onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';">
                         <?php else: ?>
                         <div class="d-block w-100 bg-secondary d-flex align-items-center justify-content-center" 
                              style="height: 400px;">
@@ -187,23 +189,23 @@ ob_end_flush();
                         <?php endif; ?>
                         <div class="carousel-caption">
                             <h5><?php echo htmlspecialchars(mb_substr($article['title'], 0, 100)); ?><?php echo mb_strlen($article['title']) > 100 ? '...' : ''; ?></h5>
-                            <p><?php echo htmlspecialchars(mb_substr(strip_tags($article['content']), 0, 150)); ?>...</p>
-                            <a href="artikel.php?id=<?php echo $article['article_id']; ?>" 
-                               class="btn btn-primary btn-sm">
-                                Baca Selengkapnya
-                            </a>
+                            <p><?php echo htmlspecialchars(mb_substr(strip_tags($article['content']), 0, 120)); ?>...</p>
                         </div>
                     </div>
                     <?php endfor; ?>
                 </div>
-                <button class="carousel-control-prev" type="button" data-bs-target="#heroCarousel" data-bs-slide="prev">
-                    <span class="carousel-control-prev-icon"></span>
+                
+                <!-- Carousel Controls -->
+                <?php if (count($articles) > 1): ?>
+                <button class="carousel-control-prev" type="button" data-bs-target="#heroCarousel" data-bs-slide="prev" onclick="event.stopPropagation();">
+                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
                     <span class="visually-hidden">Kembali</span>
                 </button>
-                <button class="carousel-control-next" type="button" data-bs-target="#heroCarousel" data-bs-slide="next">
-                    <span class="carousel-control-next-icon"></span>
+                <button class="carousel-control-next" type="button" data-bs-target="#heroCarousel" data-bs-slide="next" onclick="event.stopPropagation();">
+                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
                     <span class="visually-hidden">Lanjut</span>
                 </button>
+                <?php endif; ?>
             </div>
             <?php endif; ?>
 

@@ -65,9 +65,7 @@ $siteInfo = getSiteInfo();
                 <ul class="list-unstyled">
                     <li><a href="<?php echo $baseUrl; ?>"><i class="fas fa-home me-2"></i>Beranda</a></li>
                     <li><a href="<?php echo $baseUrl; ?>/berita.php"><i class="fas fa-newspaper me-2"></i>Berita</a></li>
-                    <li><a href="#"><i class="fas fa-info-circle me-2"></i>Tentang Kami</a></li>
                     <li><a href="#"><i class="fas fa-envelope me-2"></i>Kontak</a></li>
-                    <li><a href="#"><i class="fas fa-shield-alt me-2"></i>Kebijakan Privasi</a></li>
                 </ul>
             </div>
 
@@ -436,6 +434,67 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    // ========================================
+    // HERO CAROUSEL ENHANCEMENTS - PERBAIKAN
+    // ========================================
+    const carouselItems = document.querySelectorAll('#heroCarousel .carousel-item');
+    
+    if (carouselItems.length > 0) {
+        console.log('Hero carousel enhancement initialized with', carouselItems.length, 'items');
+        
+        carouselItems.forEach(item => {
+            // Prevent carousel controls from triggering item click
+            const controls = document.querySelectorAll('#heroCarousel .carousel-control-prev, #heroCarousel .carousel-control-next');
+            controls.forEach(control => {
+                control.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            });
+            
+            // Add visual feedback on hover
+            item.addEventListener('mouseenter', function() {
+                this.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+            });
+            
+            item.addEventListener('mouseleave', function() {
+                this.style.transform = 'scale(1)';
+                this.style.opacity = '1';
+            });
+            
+            // Add click feedback
+            item.addEventListener('click', function(e) {
+                // Ignore if clicking on control buttons
+                if (e.target.closest('.carousel-control-prev') || e.target.closest('.carousel-control-next')) {
+                    return;
+                }
+                
+                // Visual feedback
+                this.style.opacity = '0.9';
+                setTimeout(() => {
+                    this.style.opacity = '1';
+                }, 150);
+            });
+        });
+        
+        // Pause carousel on hover
+        const carousel = document.getElementById('heroCarousel');
+        if (carousel) {
+            carousel.addEventListener('mouseenter', function() {
+                const bsCarousel = bootstrap.Carousel.getInstance(carousel);
+                if (bsCarousel) {
+                    bsCarousel.pause();
+                }
+            });
+            
+            carousel.addEventListener('mouseleave', function() {
+                const bsCarousel = bootstrap.Carousel.getInstance(carousel);
+                if (bsCarousel) {
+                    bsCarousel.cycle();
+                }
+            });
+        }
+    }
 });
 </script>
 
@@ -567,6 +626,7 @@ window.addEventListener('unhandledrejection', function(event) {
 });
 
 console.log('Footer scripts initialized successfully');
+console.log('Hero carousel enhancements loaded');
 </script>
 
 </body>

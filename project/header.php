@@ -304,6 +304,221 @@ $siteInfo = getSiteInfo();
         color: #333 !important;
     }
 
+    /* ========================================
+       HERO CAROUSEL IMPROVEMENTS - PERBAIKAN UTAMA
+       ======================================== */
+    
+    #heroCarousel {
+        margin-bottom: 20px;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    #heroCarousel .carousel-item {
+        position: relative;
+        height: 400px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    #heroCarousel .carousel-item img {
+        width: 100%;
+        height: 400px;
+        object-fit: cover;
+    }
+
+    /* Dark overlay untuk readability yang KUAT */
+    #heroCarousel .carousel-item::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(
+            to bottom, 
+            rgba(0,0,0,0.2) 0%, 
+            rgba(0,0,0,0.5) 50%,
+            rgba(0,0,0,0.85) 100%
+        );
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    #heroCarousel .carousel-caption {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 40px 30px 30px;
+        text-align: left;
+        z-index: 10;
+        background: transparent;
+    }
+
+    #heroCarousel .carousel-caption h5 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 12px;
+        text-shadow: 2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.6);
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        letter-spacing: -0.5px;
+    }
+
+    #heroCarousel .carousel-caption p {
+        font-size: 1rem;
+        color: #f0f0f0;
+        margin-bottom: 0;
+        text-shadow: 1px 1px 6px rgba(0,0,0,0.9), 0 0 15px rgba(0,0,0,0.6);
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        font-weight: 400;
+    }
+
+    /* Hover effect yang smooth */
+    #heroCarousel .carousel-item:hover {
+        transform: scale(1.01);
+    }
+
+    #heroCarousel .carousel-item:hover::after {
+        background: linear-gradient(
+            to bottom, 
+            rgba(0,0,0,0.3) 0%, 
+            rgba(0,0,0,0.6) 50%,
+            rgba(0,0,0,0.95) 100%
+        );
+    }
+
+    #heroCarousel .carousel-item:hover .carousel-caption h5 {
+        text-shadow: 3px 3px 10px rgba(0,0,0,1), 0 0 25px rgba(0,0,0,0.8);
+    }
+
+    /* Carousel controls styling */
+    #heroCarousel .carousel-control-prev,
+    #heroCarousel .carousel-control-next {
+        width: 60px;
+        opacity: 0.7;
+        transition: opacity 0.3s ease;
+        z-index: 15;
+    }
+
+    #heroCarousel .carousel-control-prev:hover,
+    #heroCarousel .carousel-control-next:hover {
+        opacity: 1;
+    }
+
+    #heroCarousel .carousel-control-prev-icon,
+    #heroCarousel .carousel-control-next-icon {
+        width: 40px;
+        height: 40px;
+        background-color: rgba(0,0,0,0.6);
+        border-radius: 50%;
+        padding: 10px;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 992px) {
+        #heroCarousel .carousel-item {
+            height: 350px;
+        }
+        
+        #heroCarousel .carousel-item img {
+            height: 350px;
+        }
+        
+        #heroCarousel .carousel-caption {
+            padding: 30px 25px 25px;
+        }
+        
+        #heroCarousel .carousel-caption h5 {
+            font-size: 1.4rem;
+        }
+        
+        #heroCarousel .carousel-caption p {
+            font-size: 0.95rem;
+        }
+    }
+
+    @media (max-width: 768px) {
+        #heroCarousel .carousel-item {
+            height: 300px;
+        }
+        
+        #heroCarousel .carousel-item img {
+            height: 300px;
+        }
+        
+        #heroCarousel .carousel-caption {
+            padding: 25px 20px 20px;
+        }
+        
+        #heroCarousel .carousel-caption h5 {
+            font-size: 1.2rem;
+            -webkit-line-clamp: 2;
+            margin-bottom: 8px;
+        }
+        
+        #heroCarousel .carousel-caption p {
+            font-size: 0.85rem;
+            -webkit-line-clamp: 1;
+        }
+
+        #heroCarousel .carousel-control-prev,
+        #heroCarousel .carousel-control-next {
+            width: 50px;
+        }
+
+        #heroCarousel .carousel-control-prev-icon,
+        #heroCarousel .carousel-control-next-icon {
+            width: 35px;
+            height: 35px;
+        }
+    }
+
+    @media (max-width: 576px) {
+        #heroCarousel .carousel-item {
+            height: 250px;
+        }
+        
+        #heroCarousel .carousel-item img {
+            height: 250px;
+        }
+        
+        #heroCarousel .carousel-caption {
+            padding: 20px 15px 15px;
+        }
+        
+        #heroCarousel .carousel-caption h5 {
+            font-size: 1rem;
+            -webkit-line-clamp: 2;
+        }
+        
+        #heroCarousel .carousel-caption p {
+            font-size: 0.75rem;
+            -webkit-line-clamp: 1;
+        }
+
+        #heroCarousel .carousel-control-prev,
+        #heroCarousel .carousel-control-next {
+            width: 40px;
+        }
+
+        #heroCarousel .carousel-control-prev-icon,
+        #heroCarousel .carousel-control-next-icon {
+            width: 30px;
+            height: 30px;
+        }
+    }
+
     /* Password Strength Indicator */
     .password-strength-meter {
         margin-top: 8px;
@@ -638,36 +853,36 @@ $siteInfo = getSiteInfo();
     </nav>
 
     <!-- Category Navigation -->
-<div class="container-fluid text-white bg-secondary">
-    <div class="d-flex flex-wrap justify-content-center">
-        <nav class="category-nav">
-            <ul class="navbar-nav d-flex flex-row justify-content-center">
-                <li class="nav-item">
-                    <a class="nav-link <?php echo ($current_page == 'index') ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>">Home</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link <?php echo (in_array($current_page, ['berita', 'artikel'])) ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>/berita.php">Berita</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link <?php echo ($current_page == 'kategori' && isset($_GET['slug']) && $_GET['slug'] == 'nasional') ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>/kategori.php?slug=nasional">Nasional</a>
-                </li>
-                <li class="nav-item dropdown d-none d-md-block">
-                    <a class="nav-link dropdown-toggle m-2" href="#" role="button" data-bs-toggle="dropdown">Internasional</a>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=asean">ASEAN</a></li>
-                        <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=asean-pasifik">ASEAN Pasifik</a></li>
-                        <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=timur-tengah">Timur Tengah</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=internasional">Semua Internasional</a></li>
-                    </ul>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link m-2" href="<?php echo $baseUrl; ?>/kategori.php">Semua Kategori</a>
-                </li>
-            </ul>
-        </nav>
+    <div class="container-fluid text-white bg-secondary">
+        <div class="d-flex flex-wrap justify-content-center">
+            <nav class="category-nav">
+                <ul class="navbar-nav d-flex flex-row justify-content-center">
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo ($current_page == 'index') ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo (in_array($current_page, ['berita', 'artikel'])) ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>/berita.php">Berita</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo ($current_page == 'kategori' && isset($_GET['slug']) && $_GET['slug'] == 'nasional') ? 'active' : ''; ?> m-2" href="<?php echo $baseUrl; ?>/kategori.php?slug=nasional">Nasional</a>
+                    </li>
+                    <li class="nav-item dropdown d-none d-md-block">
+                        <a class="nav-link dropdown-toggle m-2" href="#" role="button" data-bs-toggle="dropdown">Internasional</a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=asean">ASEAN</a></li>
+                            <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=asean-pasifik">ASEAN Pasifik</a></li>
+                            <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=timur-tengah">Timur Tengah</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="<?php echo $baseUrl; ?>/kategori.php?slug=internasional">Semua Internasional</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link m-2" href="<?php echo $baseUrl; ?>/kategori.php">Semua Kategori</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
     </div>
-</div>
 
     <!-- Login Modal -->
     <div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
