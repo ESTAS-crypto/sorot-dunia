@@ -14,10 +14,10 @@ ini_set('log_errors', 1);
 error_reporting(E_ALL);
 
 // Konfigurasi database - sesuai kredensial asli Anda
-$host = "103.180.162.183";
-$user = "arinnapr_uinievan";
-$pass = ")^YZ!dZxr{l2";
-$db   = "arinnapr_dbinievan";
+$host = "....;
+$user = "...";
+$pass = ".....";
+$db   = ".....";
 
 // Buat koneksi database
 $koneksi = mysqli_connect($host, $user, $pass, $db);
