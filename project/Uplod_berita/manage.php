@@ -5,7 +5,6 @@ require_once '../ajax/image_config.php';
 
 // ===== FUNGSI: Get dan Auto-Fix Image URL =====
 function getArticleImageWithAutoFix($article_id, $article_status, $koneksi) {
-    // Get image from database
     $query = "SELECT i.id, i.filename, i.url, i.is_external 
               FROM images i 
               WHERE i.source_type = 'article' AND i.source_id = ? 
@@ -23,10 +22,9 @@ function getArticleImageWithAutoFix($article_id, $article_status, $koneksi) {
     mysqli_stmt_close($stmt);
     
     if (!$image || $image['is_external'] == 1) {
-        return $image; // External image atau tidak ada gambar
+        return $image;
     }
     
-    // Map status ke folder
     $folder_map = [
         'draft' => 'draft',
         'pending' => 'pending',
@@ -38,13 +36,10 @@ function getArticleImageWithAutoFix($article_id, $article_status, $koneksi) {
     $filename = $image['filename'];
     $correct_url = "https://inievan.my.id/project/uploads/articles/{$correct_folder}/{$filename}";
     
-    // Cek apakah URL sudah benar
     if ($image['url'] !== $correct_url) {
-        // URL tidak sesuai, cek file fisik
         $physical_path = __DIR__ . "/../uploads/articles/{$correct_folder}/{$filename}";
         
         if (file_exists($physical_path)) {
-            // File ada di lokasi yang benar, update database
             $update_query = "UPDATE images SET url = ? WHERE id = ?";
             $update_stmt = mysqli_prepare($koneksi, $update_query);
             
@@ -52,17 +47,13 @@ function getArticleImageWithAutoFix($article_id, $article_status, $koneksi) {
                 mysqli_stmt_bind_param($update_stmt, "si", $correct_url, $image['id']);
                 mysqli_stmt_execute($update_stmt);
                 mysqli_stmt_close($update_stmt);
-                
-                // Update array untuk return
                 $image['url'] = $correct_url;
             }
         } else {
-            // File tidak ada di folder yang seharusnya, cari di folder lain
             $folders = ['draft', 'pending', 'published', 'rejected'];
             foreach ($folders as $folder) {
                 $search_path = __DIR__ . "/../uploads/articles/{$folder}/{$filename}";
                 if (file_exists($search_path)) {
-                    // Gunakan URL dari folder yang ditemukan
                     $image['url'] = "https://inievan.my.id/project/uploads/articles/{$folder}/{$filename}";
                     break;
                 }
@@ -177,6 +168,7 @@ if (isAdmin()) {
     --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.08);
     --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.12);
     --shadow-heavy: 0 8px 32px rgba(0, 0, 0, 0.16);
+    --premium-color: #ffd700;
 }
 
 .stats-grid {
@@ -350,6 +342,37 @@ if (isAdmin()) {
     color: #383d41;
 }
 
+/* Premium Badge */
+.premium-badge {
+    background: linear-gradient(135deg, #ffd700, #ffed4e);
+    color: #000;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.premium-badge i {
+    font-size: 0.875rem;
+}
+
+.free-badge {
+    background: #e9ecef;
+    color: #495057;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
 .article-excerpt {
     color: var(--accent-color);
     font-size: 0.9rem;
@@ -501,6 +524,51 @@ if (isAdmin()) {
     color: var(--accent-color);
 }
 
+/* Approval Modal */
+.modal-content {
+    border-radius: 16px;
+    border: 2px solid var(--border-color);
+}
+
+.modal-header {
+    background: var(--light-gray);
+    border-bottom: 2px solid var(--border-color);
+    border-radius: 14px 14px 0 0;
+}
+
+.modal-body {
+    padding: 2rem;
+}
+
+.form-check-input:checked {
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+}
+
+.premium-option {
+    padding: 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.premium-option:hover {
+    background: var(--hover-color);
+    border-color: var(--primary-color);
+}
+
+.premium-option.selected {
+    border-color: var(--success-color);
+    background: rgba(40, 167, 69, 0.05);
+}
+
+.premium-icon {
+    font-size: 2rem;
+    margin-right: 1rem;
+}
+
 @media (max-width: 768px) {
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -596,14 +664,12 @@ if (isAdmin()) {
         <div class="articles-grid">
             <?php foreach ($articles as $article): ?>
             <?php 
-            // Get article image dengan auto-fix
             $image = getArticleImageWithAutoFix(
                 $article['article_id'], 
                 $article['article_status'], 
                 $koneksi
             );
             
-            // Cek permission delete
             $can_delete = canDeleteArticle($article, $current_user);
             ?>
             <div class="article-card">
@@ -645,6 +711,16 @@ if (isAdmin()) {
                         <span class="status-badge status-<?php echo $article['article_status']; ?>">
                             <?php echo ucfirst($article['article_status']); ?>
                         </span>
+                        
+                        <?php if ($article['article_status'] === 'published'): ?>
+                            <?php if ($article['post_status'] === 'Premium'): ?>
+                                <span class="premium-badge">
+                                    <i class="fas fa-crown"></i> Premium
+                                </span>
+                            <?php else: ?>
+                                <span class="free-badge">Free</span>
+                            <?php endif; ?>
+                        <?php endif; ?>
                     </div>
 
                     <div class="article-excerpt">
@@ -666,7 +742,7 @@ if (isAdmin()) {
 
                         <?php if (isAdmin() && $article['article_status'] === 'pending'): ?>
                         <button class="btn-action btn-approve"
-                            onclick="approveArticle(<?php echo $article['article_id']; ?>)" title="Approve">
+                            onclick="showApprovalModal(<?php echo $article['article_id']; ?>)" title="Approve">
                             <i class="fas fa-check"></i>
                         </button>
 
@@ -726,33 +802,159 @@ if (isAdmin()) {
     </div>
 </div>
 
+<!-- Approval Modal -->
+<div class="modal fade" id="approvalModal" tabindex="-1" aria-labelledby="approvalModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="approvalModalLabel">
+                    <i class="fas fa-check-circle text-success me-2"></i>Approve Artikel
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3">Pilih tipe publikasi untuk artikel ini:</p>
+                
+                <div class="premium-option" data-value="Free" onclick="selectPostType('Free', this)">
+                    <div class="d-flex align-items-center">
+                        <div class="premium-icon">
+                            <i class="fas fa-globe text-primary"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1"><strong>Free</strong></h6>
+                            <small class="text-muted">Artikel dapat diakses oleh semua pengunjung</small>
+                        </div>
+                        <div>
+                            <i class="fas fa-check-circle text-success d-none" id="check-free"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="premium-option" data-value="Premium" onclick="selectPostType('Premium', this)">
+                    <div class="d-flex align-items-center">
+                        <div class="premium-icon">
+                            <i class="fas fa-crown" style="color: #ffd700;"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1"><strong>Premium</strong></h6>
+                            <small class="text-muted">Hanya untuk pengguna premium/terdaftar</small>
+                        </div>
+                        <div>
+                            <i class="fas fa-check-circle text-success d-none" id="check-premium"></i>
+                        </div>
+                    </div>
+                </div>
+                
+              <input type="hidden" id="selectedPostType" value="Free">
+                <input type="hidden" id="approveArticleId" value="">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Batal
+                </button>
+                <button type="button" class="btn btn-success" onclick="confirmApproval()">
+                    <i class="fas fa-check me-2"></i>Approve & Publish
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-function approveArticle(articleId) {
-    if (confirm('Approve artikel ini?')) {
-        fetch('/project/ajax/admin_actions.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                action: 'approve',
-                article_id: articleId,
-                csrf_token: '<?php echo $csrf_token; ?>'
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Artikel berhasil diapprove!');
-                location.reload();
-            } else {
-                alert('Error: ' + data.message);
-            }
-        })
-        .catch(error => {
-            alert('Network error occurred');
-        });
+let selectedArticleId = null;
+let selectedPostType = 'Free';
+
+function showApprovalModal(articleId) {
+    selectedArticleId = articleId;
+    document.getElementById('approveArticleId').value = articleId;
+    
+    // Reset selection
+    document.querySelectorAll('.premium-option').forEach(opt => {
+        opt.classList.remove('selected');
+    });
+    document.querySelectorAll('.fa-check-circle').forEach(icon => {
+        icon.classList.add('d-none');
+    });
+    
+    // Select Free by default
+    selectPostType('Free', document.querySelector('[data-value="Free"]'));
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('approvalModal'));
+    modal.show();
+}
+
+function selectPostType(type, element) {
+    selectedPostType = type;
+    document.getElementById('selectedPostType').value = type;
+    
+    // Remove previous selection
+    document.querySelectorAll('.premium-option').forEach(opt => {
+        opt.classList.remove('selected');
+    });
+    document.querySelectorAll('.fa-check-circle').forEach(icon => {
+        icon.classList.add('d-none');
+    });
+    
+    // Add new selection
+    element.classList.add('selected');
+    const checkIcon = type === 'Free' ? 'check-free' : 'check-premium';
+    document.getElementById(checkIcon).classList.remove('d-none');
+}
+
+function confirmApproval() {
+    if (!selectedArticleId) {
+        alert('Error: Article ID not found');
+        return;
     }
+    
+    const postType = document.getElementById('selectedPostType').value;
+    
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('approvalModal'));
+    modal.hide();
+    
+    // Show loading
+    const approveBtn = document.querySelector(`button[onclick*="showApprovalModal(${selectedArticleId})"]`);
+    if (approveBtn) {
+        approveBtn.disabled = true;
+        approveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    }
+    
+    // Send approval request
+    fetch('/project/ajax/admin_actions.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            action: 'approve',
+            article_id: selectedArticleId,
+            post_status: postType,
+            csrf_token: '<?php echo $csrf_token; ?>'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`Artikel berhasil diapprove sebagai ${postType}!`);
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+            if (approveBtn) {
+                approveBtn.disabled = false;
+                approveBtn.innerHTML = '<i class="fas fa-check"></i>';
+            }
+        }
+    })
+    .catch(error => {
+        alert('Network error occurred');
+        console.error('Approval error:', error);
+        if (approveBtn) {
+            approveBtn.disabled = false;
+            approveBtn.innerHTML = '<i class="fas fa-check"></i>';
+        }
+    });
 }
 
 function rejectArticle(articleId) {

@@ -13,11 +13,11 @@ $current_page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
     <!-- User Profile -->
     <div class="p-4 text-center border-bottom border-secondary">
         <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
-            style="width: 60px; height: 60px; font-size: 1.5rem;">
+            style="width: 60px; height: 60px; font-size: 1.5rem; color:aliceblue;">
             <?php echo strtoupper(substr($_SESSION['username'] ?? 'A', 0, 1)); ?>
         </div>
-        <div class="fw-semibold"><?php echo $_SESSION['username'] ?? 'Admin'; ?></div>
-        <small class="text-muted"><?php echo $_SESSION['user_role'] ?? 'Administrator'; ?></small>
+        <div class="fw-semibold"style="color: white;"><?php echo $_SESSION['username'] ?? 'Admin'; ?></div>
+        <small class="text-muted"><?php echo ucfirst($_SESSION['user_role'] ?? 'Administrator'); ?></small>
     </div>
     
     <!-- Navigation Menu -->
@@ -66,13 +66,13 @@ $current_page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
         <hr class="my-3" style="border-color: var(--border-color);">
         
         <!-- Logout Section -->
-        <a href="admin-login.php?logout=success" 
-        class="nav-link text-danger"
-        onclick="return confirm('Apakah Anda yakin ingin logout?')">
+        <a href="../logout.php" 
+           class="nav-link text-danger"
+           onclick="return confirm('Apakah Anda yakin ingin logout?')">
             <i class="bi bi-box-arrow-right"></i>Logout
         </a>
         
-        <a href="../index.php" class="nav-link text-muted">
+        <a href="../" class="nav-link text-muted">
             <i class="bi bi-house"></i>Kembali ke Home
         </a>
     </nav>

@@ -1,5 +1,5 @@
 <?php
-// kategori.php - FIXED VERSION dengan Artikel Terbaru
+// kategori.php - FIXED VERSION dengan Premium Badge di Artikel Terbaru
 ob_start();
 
 require 'config/config.php';
@@ -75,12 +75,15 @@ try {
         mysqli_stmt_close($stmt);
         
         // Get articles
-        $articles_query = "SELECT 
+        $articles_query = "SELECT
                             a.article_id,
                             a.title,
                             a.content,
+                            a.meta_description,
                             a.publication_date,
                             a.view_count,
+                            a.article_status,
+                            a.post_status,
                             u.full_name as author_name,
                             u.username as author_username,
                             c.name as category_name,
@@ -137,11 +140,12 @@ try {
         mysqli_stmt_close($stmt);
     }
     
-    // ===== GET LATEST ARTICLES (ARTIKEL TERBARU) =====
+    // ===== GET LATEST ARTICLES (ARTIKEL TERBARU) DENGAN POST_STATUS =====
     $latest_query = "SELECT 
                         a.article_id,
                         a.title,
                         a.publication_date,
+                        a.post_status,
                         c.name as category_name,
                         c.slug as category_slug
                     FROM articles a
@@ -256,6 +260,10 @@ ob_end_flush();
     top: 10px;
     right: 10px;
     z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-end;
 }
 
 .article-title {
@@ -363,6 +371,53 @@ ob_end_flush();
 
 .trending-content a:hover {
     color: #007bff;
+}
+
+/* Premium Badge Styling */
+.premium-badge {
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #000;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+.premium-badge i {
+    font-size: 11px;
+}
+
+/* Premium Badge in Trending Items */
+.trending-content .premium-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.trending-content .premium-indicator i {
+    font-size: 10px;
 }
 
 .pagination .page-link {
@@ -487,6 +542,11 @@ ob_end_flush();
                                             <i class="fas fa-eye me-1"></i>
                                             <?php echo number_format($article['view_count']); ?>
                                         </span>
+                                        <?php if ($article['post_status'] === 'Premium'): ?>
+                                        <span class="premium-badge">
+                                            <i class="fas fa-crown"></i> PREMIUM
+                                        </span>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 <?php endif; ?>
@@ -648,7 +708,7 @@ ob_end_flush();
                 </div>
             </div>
 
-            <!-- ===== ARTIKEL TERBARU (DITAMBAHKAN KEMBALI) ===== -->
+            <!-- ===== ARTIKEL TERBARU DENGAN PREMIUM BADGE ===== -->
             <div class="sidebar mt-3">
                 <div class="sidebar-header">
                     <i class="fas fa-newspaper me-2"></i>Artikel Terbaru
@@ -662,6 +722,11 @@ ob_end_flush();
                             <div class="trending-content">
                                 <a href="artikel.php?id=<?php echo $latest['article_id']; ?>">
                                     <?php echo htmlspecialchars($latest['title']); ?>
+                                    <?php if ($latest['post_status'] === 'Premium'): ?>
+                                    <span class="premium-indicator">
+                                        <i class="fas fa-crown"></i> PREMIUM
+                                    </span>
+                                    <?php endif; ?>
                                 </a>
                                 <div class="text-muted small mt-1">
                                     <i class="fas fa-calendar me-1"></i>
@@ -717,7 +782,7 @@ ob_end_flush();
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Category page loaded with Latest Articles widget');
+    console.log('Category page loaded with Latest Articles widget and Premium Badge');
     
     <?php if ($category_info): ?>
     console.log('Category:', '<?php echo addslashes($category_info['name']); ?>');
@@ -726,6 +791,16 @@ document.addEventListener('DOMContentLoaded', function() {
     <?php endif; ?>
     
     console.log('Latest articles:', <?php echo count($latest_articles); ?>);
+    
+    // Count premium articles in latest
+    let premiumCount = 0;
+    <?php foreach ($latest_articles as $latest): ?>
+        <?php if ($latest['post_status'] === 'Premium'): ?>
+        premiumCount++;
+        <?php endif; ?>
+    <?php endforeach; ?>
+    
+    console.log('Premium articles in latest:', premiumCount);
     
     // Handle image loading
     const images = document.querySelectorAll('.card-img-top');
@@ -737,6 +812,17 @@ document.addEventListener('DOMContentLoaded', function() {
             if (placeholder && placeholder.classList.contains('placeholder-image')) {
                 placeholder.style.display = 'flex';
             }
+        });
+    });
+    
+    // Add hover effect for premium badges
+    const premiumBadges = document.querySelectorAll('.premium-badge, .premium-indicator');
+    premiumBadges.forEach(badge => {
+        badge.addEventListener('mouseenter', function() {
+            this.style.transform = 'scale(1.05)';
+        });
+        badge.addEventListener('mouseleave', function() {
+            this.style.transform = 'scale(1)';
         });
     });
 });

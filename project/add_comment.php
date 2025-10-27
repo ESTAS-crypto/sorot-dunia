@@ -1,5 +1,5 @@
 <?php
-// add_comment.php - Support AJAX dan redirect biasa
+// add_comment.php - Support AJAX dan redirect biasa + MODAL LOGIN FIX
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -110,10 +110,12 @@ if (!$user_id) {
         echo json_encode([
             'success' => false,
             'message' => 'Anda harus login untuk mengirim komentar',
-            'redirect' => 'login.php'
+            'require_login' => true,
+            'redirect' => false // Tidak redirect, tapi buka modal
         ]);
     } else {
-        header("Location: login.php?error=session_expired");
+        // Untuk non-AJAX, tetap redirect
+        header("Location: index.php?error=login_required");
     }
     exit();
 }

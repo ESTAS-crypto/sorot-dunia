@@ -26,7 +26,6 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_
     }
 }
 
-// Menentukan halaman aktif untuk navigasi
 $current_page = basename($_SERVER['PHP_SELF'], '.php');
 $page_mapping = [
     'index' => 'Home',
@@ -62,6 +61,8 @@ $siteInfo = getSiteInfo();
     <!-- Custom CSS -->
     <link rel="stylesheet" href="<?php echo $baseUrl; ?>/style/berita.css">
     <link rel="stylesheet" href="<?php echo $baseUrl; ?>/style/modal.css">
+    <link rel="stylesheet" href="<?php echo $baseUrl; ?>/style/artikel.css">
+
     
     <style>
     /* Reset and base styles */
@@ -424,7 +425,72 @@ $siteInfo = getSiteInfo();
         border-radius: 50%;
         padding: 10px;
     }
+/* Premium Article Styling */
+.premium-badge {
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #000;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+    animation: shimmer 2s infinite;
+}
 
+@keyframes shimmer {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+.premium-badge i {
+    font-size: 12px;
+}
+
+.news-item.premium {
+    border-left: 4px solid #FFD700;
+    background: linear-gradient(to right, rgba(255, 215, 0, 0.05), transparent);
+}
+
+.news-item.free {
+    border-left: 4px solid #6c757d;
+}
+
+.section-divider {
+    margin: 30px 0;
+    padding: 15px;
+    background: linear-gradient(90deg, #f8f9fa, #e9ecef, #f8f9fa);
+    border-radius: 10px;
+    text-align: center;
+}
+
+.section-divider h5 {
+    margin: 0;
+    color: #495057;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.section-divider.premium-section {
+    background: linear-gradient(90deg, #fff9e6, #fff3cc, #fff9e6);
+    border: 2px solid #FFD700;
+}
+
+.section-divider.premium-section h5 {
+    color: #FF8C00;
+}
+
+.news-meta .premium-indicator {
+    color: #FFD700;
+    font-weight: 600;
+}
     /* Responsive adjustments */
     @media (max-width: 992px) {
         #heroCarousel .carousel-item {
@@ -696,6 +762,11 @@ $siteInfo = getSiteInfo();
 </head>
 <body <?php echo $is_logged_in ? 'class="logged-in" data-user-id="' . htmlspecialchars($user['id'] ?? '') . '"' : ''; ?>>
     
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+    
     <!-- Error Suppression -->
     <script>
     (function() {
@@ -908,6 +979,11 @@ $siteInfo = getSiteInfo();
                                 </button>
                             </div>
                         </div>
+                        <div class="mb-3 text-end">
+                            <a href="#" class="forgot-password-link" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">
+                                <i class="fas fa-key me-1"></i>Lupa Password?
+                            </a>
+                        </div>
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-sign-in-alt me-2"></i>Masuk
@@ -918,6 +994,75 @@ $siteInfo = getSiteInfo();
                 <div class="modal-footer">
                     <div class="w-100 text-center">
                         <p class="mb-0">Belum punya akun? <a href="#" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#registerModal">Daftar disini</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div class="modal fade" id="forgotPasswordModal" tabindex="-1" aria-labelledby="forgotPasswordModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="forgotPasswordModalLabel"><i class="fas fa-key me-2"></i>Reset Password</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="forgotPasswordAlert" class="alert d-none" role="alert"></div>
+                    
+                    <!-- Step 1: Email Input -->
+                    <div id="emailStep">
+                        <p class="text-muted mb-3">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Masukkan email yang terdaftar. Kami akan mengirimkan link reset password ke email Anda.
+                        </p>
+                        <form id="forgotPasswordForm">
+                            <div class="mb-3">
+                                <label for="forgotEmail" class="form-label">Email</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+                                    <input type="email" class="form-control" id="forgotEmail" name="email" 
+                                           placeholder="nama@email.com" required>
+                                </div>
+                                <small class="text-muted">Email harus terdaftar di sistem</small>
+                            </div>
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary" id="sendResetLinkBtn">
+                                    <i class="fas fa-paper-plane me-2"></i>Kirim Link Reset
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#loginModal">
+                                    <i class="fas fa-arrow-left me-2"></i>Kembali ke Login
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- Step 2: Success Message -->
+                    <div id="successStep" class="d-none text-center">
+                        <div class="email-sent-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <h5 class="mb-3">Email Terkirim!</h5>
+                        <p class="text-muted mb-3">
+                            Link reset password telah dikirim ke email Anda. 
+                            Silakan cek inbox atau folder spam Anda.
+                        </p>
+                        <div class="alert alert-info">
+                            <i class="fas fa-clock me-2"></i>
+                            Link akan kadaluarsa dalam <strong>1 jam</strong>
+                        </div>
+                        <div class="countdown-timer" id="countdownTimer">
+                            Anda dapat mengirim ulang dalam: <span id="countdown">60</span> detik
+                        </div>
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="button" class="btn btn-outline-primary" id="resendEmailBtn" disabled>
+                                <i class="fas fa-redo me-2"></i>Kirim Ulang Email
+                            </button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-2"></i>Tutup
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1057,6 +1202,7 @@ $siteInfo = getSiteInfo();
             icon.classList.add('fa-eye');
         }
     }
+    
     </script>
 </body>
 </html>

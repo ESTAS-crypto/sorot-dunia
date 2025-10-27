@@ -1,5 +1,5 @@
 <?php
-// article_reactions.php - HANDLER LENGKAP UNTUK REACTIONS
+// article_reactions.php - HANDLER LENGKAP UNTUK REACTIONS + MODAL LOGIN FIX
 require_once 'config/config.php';
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -65,7 +65,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'react') {
     if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
         echo json_encode([
             'success' => false,
-            'message' => 'Anda harus login untuk memberikan reaksi'
+            'message' => 'Anda harus login untuk memberikan reaksi',
+            'require_login' => true
         ]);
         exit();
     }
@@ -89,6 +90,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'react') {
         echo json_encode([
             'success' => false,
             'message' => 'Data tidak lengkap',
+            'require_login' => ($user_id <= 0),
             'debug' => [
                 'article_id' => $article_id,
                 'reaction_type' => $reaction_type,
@@ -247,23 +249,24 @@ function displayArticleReactions($article_id) {
                 <span class="reaction-count dislike-count">' . $reactions['dislike'] . '</span>
             </button>';
     } else {
-        $redirect_url = !empty($article_slug) 
-            ? 'artikel.php?slug=' . urlencode($article_slug) 
-            : 'artikel.php?id=' . $article_id;
-        
+        // PERBAIKAN: Ganti href dengan data-bs-toggle untuk buka modal
         echo '
-            <a href="login.php?redirect=' . urlencode($redirect_url) . '" 
-               class="reaction-btn like-btn">
+            <button class="reaction-btn like-btn" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#loginModal"
+                    data-require-login="true">
                 <i class="fas fa-thumbs-up"></i>
                 <span>Suka</span>
                 <span class="reaction-count">' . $reactions['like'] . '</span>
-            </a>
-            <a href="login.php?redirect=' . urlencode($redirect_url) . '" 
-               class="reaction-btn dislike-btn">
+            </button>
+            <button class="reaction-btn dislike-btn" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#loginModal"
+                    data-require-login="true">
                 <i class="fas fa-thumbs-down"></i>
                 <span>Tidak Suka</span>
                 <span class="reaction-count">' . $reactions['dislike'] . '</span>
-            </a>';
+            </button>';
     }
     
     echo '

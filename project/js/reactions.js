@@ -1,6 +1,6 @@
-// reactions.js
+// reactions.js - WITH MODAL LOGIN SUPPORT
 document.addEventListener("DOMContentLoaded", function() {
-    console.log("Reactions JS loaded");
+    console.log("Reactions JS loaded with Modal Login support");
 
     const reactionButtons = document.querySelectorAll(".reaction-btn");
     console.log("Found reaction buttons:", reactionButtons.length);
@@ -9,6 +9,13 @@ document.addEventListener("DOMContentLoaded", function() {
         button.addEventListener("click", function(e) {
             e.preventDefault();
             console.log("Button clicked:", this.dataset.reaction);
+
+            // ===== CHECK IF REQUIRES LOGIN =====
+            if (this.hasAttribute('data-require-login')) {
+                console.log('Login required, opening modal...');
+                openLoginModal();
+                return;
+            }
 
             if (this.disabled || this.classList.contains('loading')) {
                 console.log("Button disabled or loading");
@@ -59,7 +66,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     console.log("Response data:", data);
 
                     if (data.success) {
-                        // Update counts dengan format baru
+                        // Update counts
                         const likeCountElement = articleReactionContainer.querySelector(".like-count");
                         const dislikeCountElement = articleReactionContainer.querySelector(".dislike-count");
 
@@ -95,8 +102,15 @@ document.addEventListener("DOMContentLoaded", function() {
                             showFeedback(message, "success");
                         }
                     } else {
-                        console.error("Error:", data.message);
-                        showFeedback(data.message || "Terjadi kesalahan", "error");
+                        // ===== CHECK IF LOGIN REQUIRED =====
+                        if (data.require_login) {
+                            console.log('Login required from response');
+                            openLoginModal();
+                            showFeedback('Silakan login untuk memberikan reaksi', 'info');
+                        } else {
+                            console.error("Error:", data.message);
+                            showFeedback(data.message || "Terjadi kesalahan", "error");
+                        }
 
                         // Debug info jika ada
                         if (data.debug) {
@@ -118,6 +132,25 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     });
 
+    // ========================================
+    // OPEN LOGIN MODAL
+    // ========================================
+    function openLoginModal() {
+        const loginModal = document.getElementById('loginModal');
+        if (loginModal && typeof bootstrap !== 'undefined') {
+            const bsModal = new bootstrap.Modal(loginModal);
+            bsModal.show();
+            console.log('Login modal opened from reactions');
+        } else {
+            console.error('Login modal or Bootstrap not found');
+            // Fallback
+            window.location.href = 'index.php?error=login_required';
+        }
+    }
+
+    // ========================================
+    // SHOW FEEDBACK
+    // ========================================
     function showFeedback(message, type) {
         console.log("Showing feedback:", message, type);
 
@@ -130,12 +163,18 @@ document.addEventListener("DOMContentLoaded", function() {
         const feedback = document.createElement("div");
         feedback.className = `feedback-message ${type}`;
         feedback.textContent = message;
+
+        // Color based on type
+        let bgColor = '#28a745'; // success
+        if (type === 'error') bgColor = '#dc3545';
+        if (type === 'info') bgColor = '#17a2b8';
+
         feedback.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
             padding: 15px 25px;
-            background: ${type === 'success' ? '#28a745' : '#dc3545'};
+            background: ${bgColor};
             color: white;
             border-radius: 5px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -160,7 +199,9 @@ document.addEventListener("DOMContentLoaded", function() {
         }, 3000);
     }
 
-    // Load initial reactions when page loads
+    // ========================================
+    // LOAD INITIAL REACTIONS
+    // ========================================
     function loadInitialReactions() {
         const reactionContainer = document.querySelector('.article-reactions');
         if (!reactionContainer) {

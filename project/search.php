@@ -101,6 +101,7 @@ try {
                             a.publication_date,
                             a.view_count,
                             a.article_status,
+                            a.post_status,
                             u.full_name as author_name,
                             u.username as author_username,
                             c.name as category_name,
@@ -249,6 +250,11 @@ ob_end_flush();
                                                 <i class="fas fa-eye me-1"></i>
                                                 <?php echo number_format($article['view_count']); ?>
                                             </span>
+                                            <?php if ($article['post_status'] === 'Premium'): ?>
+                                                <span class="premium-badge mb-1" style="font-size: 9px; padding: 2px 8px;">
+                                                    <i class="fas fa-crown"></i> PREMIUM
+                                                </span>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                     <?php else: ?>

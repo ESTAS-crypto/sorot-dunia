@@ -1,17 +1,20 @@
 <?php
+// config.php - FIXED VERSION
 
 // Mulai session jika belum dimulai
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Konfigurasi error reporting
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+// Konfigurasi error reporting untuk production
+// Jangan tampilkan error ke user, tapi log ke file
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
+ini_set('log_errors', 1);
 error_reporting(E_ALL);
 
 // Konfigurasi database - sesuai kredensial asli Anda
-$host = "64.235.41.175";
+$host = "103.180.162.183";
 $user = "arinnapr_uinievan";
 $pass = ")^YZ!dZxr{l2";
 $db   = "arinnapr_dbinievan";
@@ -22,6 +25,18 @@ $koneksi = mysqli_connect($host, $user, $pass, $db);
 // Cek koneksi dan handle error
 if (!$koneksi) {
     error_log("Koneksi database gagal: " . mysqli_connect_error());
+    
+    // Check if this is an AJAX request
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'message' => 'Koneksi database gagal. Silakan coba lagi nanti.'
+        ]);
+        exit;
+    }
+    
     die("Koneksi database gagal. Silakan coba lagi nanti.");
 }
 
@@ -31,7 +46,7 @@ mysqli_set_charset($koneksi, "utf8");
 // Load SettingsManager
 require_once __DIR__ . '/SettingsManager.php';
 
-// PERBAIKAN UTAMA: Inisialisasi SettingsManager dengan proper error handling
+// Inisialisasi SettingsManager dengan proper error handling
 try {
     $settingsManager = SettingsManager::getInstance($koneksi);
     
@@ -290,5 +305,3 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
         initVisitorTracking($koneksi);
     }
 }
-
-?>

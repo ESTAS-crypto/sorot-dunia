@@ -26,7 +26,7 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         --border-color: #404040;
         --text-primary: #ffffff;
         --text-secondary: #b3b3b3;
-        --text-muted: #ffffffff;
+        --text-muted: #808080;
         --accent: #ffffff;
         --accent-hover: #f0f0f0;
         --shadow: rgba(0, 0, 0, 0.3);
@@ -35,6 +35,7 @@ $baseUrl = 'https://inievan.my.id/project/admin';
     /* ========== BASE STYLES ========== */
     * {
         box-sizing: border-box;
+        color: white;
     }
 
     body {
@@ -130,6 +131,11 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         padding: 1.5rem;
     }
 
+    .card-title {
+        color: var(--text-primary);
+        margin-bottom: 0;
+    }
+
     /* ========== BUTTONS ========== */
     .btn {
         border-radius: 8px;
@@ -160,6 +166,42 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         border-color: var(--accent);
     }
 
+    .btn-danger {
+        background: #dc2626;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #b91c1c;
+    }
+
+    .btn-success {
+        background: #10b981;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #059669;
+    }
+
+    .btn-warning {
+        background: #f59e0b;
+        color: var(--accent);
+    }
+
+    .btn-warning:hover {
+        background: #d97706;
+    }
+
+    .btn-info {
+        background: #3b82f6;
+        color: white;
+    }
+
+    .btn-info:hover {
+        background: #2563eb;
+    }
+
     /* ========== FORMS ========== */
     .form-control,
     .form-select {
@@ -178,16 +220,31 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.1);
     }
 
+    .form-control::placeholder {
+        color: var(--text-muted);
+    }
+
     .form-label {
         color: var(--text-primary);
         font-weight: 500;
         margin-bottom: 8px;
     }
 
+    .form-text {
+        color: var(--text-muted);
+    }
+
+    .input-group-text {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+    }
+
     /* ========== TABLES ========== */
     .table {
         background: transparent;
-        color: var(--text-primary);
+        color: black;
+
     }
 
     .table th {
@@ -198,11 +255,14 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         text-transform: uppercase;
         font-size: 0.85rem;
         letter-spacing: 0.5px;
+        padding: 12px;
+        white-space: nowrap;
     }
 
     .table td {
         border-color: var(--border-color);
         vertical-align: middle;
+        padding: 12px;
     }
 
     .table tbody tr:hover {
@@ -214,6 +274,12 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         border-radius: 12px;
         border: 1px solid var(--border-color);
         overflow: hidden;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table-striped tbody tr:nth-of-type(odd) {
+        background: rgba(255, 255, 255, 0.02);
     }
 
     /* ========== BADGES ========== */
@@ -221,6 +287,7 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         font-weight: 500;
         border-radius: 6px;
         padding: 6px 10px;
+        font-size: 0.75rem;
     }
 
     .badge.bg-success {
@@ -238,6 +305,11 @@ $baseUrl = 'https://inievan.my.id/project/admin';
 
     .badge.bg-info {
         background: #3b82f6 !important;
+    }
+
+    .badge.bg-secondary {
+        background: var(--bg-tertiary) !important;
+        color: var(--text-secondary) !important;
     }
 
     /* ========== ALERTS ========== */
@@ -259,6 +331,18 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         border: 1px solid rgba(239, 68, 68, 0.2);
     }
 
+    .alert-warning {
+        background: rgba(245, 158, 11, 0.1);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .alert-info {
+        background: rgba(59, 130, 246, 0.1);
+        color: #3b82f6;
+        border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
     /* ========== MODALS ========== */
     .modal-content {
         background: var(--bg-secondary);
@@ -273,10 +357,18 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         border-radius: 12px 12px 0 0;
     }
 
+    .modal-title {
+        color: var(--text-primary);
+    }
+
     .modal-footer {
         background: var(--bg-secondary);
         border-top: 1px solid var(--border-color);
         border-radius: 0 0 12px 12px;
+    }
+
+    .modal-body {
+        color: var(--text-primary);
     }
 
     /* ========== OVERLAY ========== */
@@ -299,12 +391,13 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         opacity: 1;
     }
 
-    /* ========== ARTICLES PAGE SPECIFIC STYLES ========== */
+    /* ========== STATS CARDS ========== */
     .stats-card {
         border-radius: 12px;
         transition: all 0.3s ease;
         position: relative;
         overflow: hidden;
+        padding: 1.5rem;
     }
 
     .stats-card:hover {
@@ -328,54 +421,26 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
     }
 
-    .badge-count {
-        background: rgba(255, 255, 255, 0.2);
-        color: white;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-size: 0.75rem;
-        margin-left: 8px;
-    }
-
-    .nav-pills .nav-link {
-        color: var(--text-secondary);
-        background: transparent;
-        border: 1px solid var(--border-color);
-        border-radius: 25px;
-        padding: 8px 16px;
-        margin-right: 8px;
-        transition: all 0.3s ease;
-    }
-
-    .nav-pills .nav-link:hover {
-        color: var(--text-primary);
-        background: var(--bg-hover);
-        border-color: var(--accent);
-    }
-
-    .nav-pills .nav-link.active {
-        color: var(--bg-primary);
-        background: var(--accent);
-        border-color: var(--accent);
-    }
-
+    /* ========== ACTION BUTTONS ========== */
     .action-buttons {
         display: flex;
         gap: 4px;
         justify-content: center;
+        flex-wrap: wrap;
     }
 
     .btn-action {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 32px;
+        min-width: 32px;
         height: 32px;
         border: none;
         border-radius: 6px;
         font-size: 0.875rem;
         transition: all 0.3s ease;
         cursor: pointer;
+        padding: 6px 10px;
     }
 
     .btn-action:hover {
@@ -408,6 +473,7 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         color: white;
     }
 
+    /* ========== SCROLL HINT ========== */
     .scroll-hint {
         background: var(--bg-tertiary);
         border: 1px solid var(--border-color);
@@ -417,9 +483,80 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         font-size: 0.875rem;
         color: var(--text-muted);
         text-align: center;
-        display: block;
+        display: none;
     }
 
+    /* ========== NAV PILLS ========== */
+    .nav-pills .nav-link {
+        color: var(--text-secondary);
+        background: transparent;
+        border: 1px solid var(--border-color);
+        border-radius: 25px;
+        padding: 8px 16px;
+        margin-right: 8px;
+        transition: all 0.3s ease;
+    }
+
+    .nav-pills .nav-link:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+        border-color: var(--accent);
+    }
+
+    .nav-pills .nav-link.active {
+        color: var(--bg-primary);
+        background: var(--accent);
+        border-color: var(--accent);
+    }
+
+    /* ========== WELCOME ALERT ========== */
+    .welcome-alert {
+        animation: slideIn 0.5s ease-out;
+        transition: opacity 0.5s ease-out;
+    }
+
+    .welcome-alert.fade-out {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    /* ========== VISITOR TREND ========== */
+    .visitor-trend {
+        display: flex;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .visitor-trend:last-child {
+        border-bottom: none;
+    }
+
+    .trend-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16px;
+        font-size: 1.2rem;
+    }
+
+    .trend-up {
+        color: #22c55e;
+    }
+
+    .trend-down {
+        color: #ef4444;
+    }
+
+    .trend-stable {
+        color: #6b7280;
+    }
+
+    /* ========== IMAGE UPLOAD ========== */
     .image-option-tabs {
         display: flex;
         margin-bottom: 16px;
@@ -485,6 +622,7 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         padding: 16px;
     }
 
+    /* ========== ARTICLE PREVIEW ========== */
     .article-meta {
         background: var(--bg-tertiary);
         border-radius: 8px;
@@ -510,51 +648,6 @@ $baseUrl = 'https://inievan.my.id/project/admin';
         padding: 24px;
     }
 
-    .welcome-alert {
-        animation: slideIn 0.5s ease-out;
-        transition: opacity 0.5s ease-out;
-    }
-
-    .welcome-alert.fade-out {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-
-    .visitor-trend {
-        display: flex;
-        align-items: center;
-        padding: 12px 0;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    .visitor-trend:last-child {
-        border-bottom: none;
-    }
-
-    .trend-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.1);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 16px;
-        font-size: 1.2rem;
-    }
-
-    .trend-up {
-        color: #22c55e;
-    }
-
-    .trend-down {
-        color: #ef4444;
-    }
-
-    .trend-stable {
-        color: #6b7280;
-    }
-
     /* ========== MOBILE RESPONSIVE ========== */
     @media (max-width: 768px) {
         .sidebar {
@@ -574,14 +667,75 @@ $baseUrl = 'https://inievan.my.id/project/admin';
             padding: 1rem;
         }
 
+        .card-header {
+            padding: 1rem;
+        }
+
         .scroll-hint {
             display: block;
         }
+
+        .table {
+            font-size: 0.875rem;
+        }
+
+        .table th,
+        .table td {
+            padding: 8px;
+        }
+
+        .btn-action {
+            min-width: 30px;
+            height: 30px;
+            padding: 5px 8px;
+        }
+
+        .stats-card {
+            padding: 1rem;
+        }
+
+        .stats-card h5 {
+            font-size: 0.875rem;
+        }
+
+        .stats-card .display-6 {
+            font-size: 1.5rem;
+        }
     }
 
-    @media (min-width: 769px) {
-        .scroll-hint {
-            display: none;
+    @media (max-width: 576px) {
+        .main-content {
+            padding: 0.75rem;
+        }
+
+        .card-header h4,
+        .card-header h5 {
+            font-size: 1rem;
+        }
+
+        .table {
+            font-size: 0.75rem;
+        }
+
+        .table th,
+        .table td {
+            padding: 6px;
+        }
+
+        .btn {
+            font-size: 0.875rem;
+            padding: 0.375rem 0.75rem;
+        }
+
+        .btn-action {
+            min-width: 28px;
+            height: 28px;
+            padding: 4px 6px;
+        }
+
+        .badge {
+            font-size: 0.65rem;
+            padding: 4px 8px;
         }
     }
 
@@ -599,7 +753,7 @@ $baseUrl = 'https://inievan.my.id/project/admin';
 
     /* ========== UTILITIES ========== */
     .text-muted {
-        color: var(--text-muted) !important;
+        color: var(--accent) !important;
     }
 
     .border-secondary {
@@ -631,6 +785,11 @@ $baseUrl = 'https://inievan.my.id/project/admin';
 
     ::-webkit-scrollbar-thumb:hover {
         background: var(--accent);
+    }
+
+    /* ========== CLOSE BUTTON ========== */
+    .btn-close {
+        filter: invert(1);
     }
     </style>
 </head>

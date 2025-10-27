@@ -65,7 +65,6 @@ function generateUniqueSlug($title, $koneksi, $exclude_id = null) {
     return $slug;
 }
 
-// Helper function untuk menentukan folder berdasarkan status dan role
 function determineImageFolder($action, $user_role) {
     if ($action === 'draft') {
         return 'draft';
@@ -78,7 +77,6 @@ function determineImageFolder($action, $user_role) {
     return 'pending';
 }
 
-// Helper function untuk menentukan status artikel
 function determineArticleStatus($action, $user_role) {
     if ($action === 'draft') {
         return 'draft';
@@ -89,6 +87,36 @@ function determineArticleStatus($action, $user_role) {
     }
     
     return 'pending';
+}
+
+// ===== CRITICAL FIX: Validate Image ID =====
+function validateImageId($image_id, $koneksi) {
+    if (empty($image_id) || $image_id <= 0) {
+        return null;
+    }
+    
+    $check_query = "SELECT id FROM images WHERE id = ? LIMIT 1";
+    $stmt = mysqli_prepare($koneksi, $check_query);
+    
+    if (!$stmt) {
+        error_log("Failed to prepare image validation query: " . mysqli_error($koneksi));
+        return null;
+    }
+    
+    mysqli_stmt_bind_param($stmt, "i", $image_id);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_bind_result($stmt, $validated_id);
+    
+    $exists = mysqli_stmt_fetch($stmt);
+    mysqli_stmt_close($stmt);
+    
+    if ($exists) {
+        error_log("✓ Image ID {$image_id} validated successfully");
+        return $validated_id;
+    } else {
+        error_log("✗ WARNING: Image ID {$image_id} does not exist in database!");
+        return null;
+    }
 }
 
 try {
@@ -146,9 +174,9 @@ try {
     error_log("Action: " . $action);
     error_log("User role: " . $_SESSION['user_role']);
     error_log("Article ID: " . ($article_id ?? 'NEW'));
-    error_log("Image ID: " . ($image_id ?? 'NULL'));
+    error_log("Image ID (raw): " . ($image_id ?? 'NULL'));
     
-    // Validation
+    // ===== BASIC VALIDATION =====
     if (empty($title)) sendResponse(false, 'Judul wajib diisi');
     if (empty($summary)) sendResponse(false, 'Ringkasan wajib diisi');
     if (empty($content)) sendResponse(false, 'Konten wajib diisi');
@@ -156,6 +184,104 @@ try {
     
     if (strlen($title) > 200) sendResponse(false, 'Judul terlalu panjang (maksimal 200 karakter)');
     if (strlen($summary) > 300) sendResponse(false, 'Ringkasan terlalu panjang (maksimal 300 karakter)');
+    
+    // ===== NEW: MANDATORY IMAGE VALIDATION FOR PUBLISH =====
+    if ($action === 'publish') {
+        error_log("=== VALIDATING PUBLISH REQUIREMENTS ===");
+        
+        // Check if image is provided
+        if (empty($image_id) || $image_id <= 0) {
+            error_log("✗ PUBLISH DENIED: No image provided");
+            sendResponse(false, 'Gambar berita wajib diupload untuk publish artikel!');
+        }
+        
+        // Validate image exists in database
+        $validated_image_id = validateImageId($image_id, $koneksi);
+        
+        if (!$validated_image_id) {
+            error_log("✗ PUBLISH DENIED: Image ID {$image_id} not found in database");
+            sendResponse(false, 'Gambar yang dipilih tidak valid. Mohon upload ulang gambar berita!');
+        }
+        
+        // Validate image file exists physically
+        $img_query = "SELECT filename FROM images WHERE id = ?";
+        $img_stmt = mysqli_prepare($koneksi, $img_query);
+        mysqli_stmt_bind_param($img_stmt, "i", $validated_image_id);
+        mysqli_stmt_execute($img_stmt);
+        mysqli_stmt_bind_result($img_stmt, $image_filename);
+        
+        if (!mysqli_stmt_fetch($img_stmt)) {
+            mysqli_stmt_close($img_stmt);
+            error_log("✗ PUBLISH DENIED: Image record not found");
+            sendResponse(false, 'Gambar berita tidak ditemukan. Mohon upload ulang!');
+        }
+        mysqli_stmt_close($img_stmt);
+        
+        // Check if physical file exists
+        $folders = ['draft', 'pending', 'published', 'rejected'];
+        $file_found = false;
+        
+        foreach ($folders as $folder) {
+            $image_path = __DIR__ . '/../uploads/articles/' . $folder . '/' . $image_filename;
+            if (file_exists($image_path)) {
+                $file_found = true;
+                error_log("✓ Image file found in {$folder} folder");
+                break;
+            }
+        }
+        
+        if (!$file_found) {
+            error_log("✗ PUBLISH DENIED: Image file not found in any folder");
+            sendResponse(false, 'File gambar berita tidak ditemukan di server. Mohon upload ulang gambar!');
+        }
+        
+        // Additional validation: Check if tags are provided
+        if (empty($tags)) {
+            error_log("⚠ WARNING: No tags provided for publish");
+            sendResponse(false, 'Tag artikel wajib diisi minimal 1 tag untuk publish!');
+        }
+        
+        // Validate minimum content length
+        $plain_content = strip_tags($content);
+        if (strlen($plain_content) < 100) {
+            error_log("✗ PUBLISH DENIED: Content too short (" . strlen($plain_content) . " chars)");
+            sendResponse(false, 'Konten artikel terlalu pendek! Minimal 100 karakter untuk publish (saat ini: ' . strlen($plain_content) . ' karakter)');
+        }
+        
+        $image_id = $validated_image_id;
+        error_log("✓ ALL PUBLISH REQUIREMENTS MET");
+        
+    } else if ($action === 'draft') {
+        // Draft: Image is optional but if provided must be valid
+        if ($image_id && $image_id > 0) {
+            $validated_image_id = validateImageId($image_id, $koneksi);
+            
+            if (!$validated_image_id) {
+                error_log("✗ DRAFT WARNING: Invalid image ID {$image_id}, setting to NULL");
+                $image_id = null;
+            } else {
+                $image_id = $validated_image_id;
+                error_log("✓ Draft with valid image ID: {$image_id}");
+            }
+        } else {
+            $image_id = null;
+            error_log("ℹ Draft without image");
+        }
+    } else {
+        // Other actions: validate if image is provided
+        if ($image_id && $image_id > 0) {
+            $validated_image_id = validateImageId($image_id, $koneksi);
+            
+            if (!$validated_image_id) {
+                error_log("✗ WARNING: Invalid image ID {$image_id}, setting to NULL");
+                $image_id = null;
+            } else {
+                $image_id = $validated_image_id;
+            }
+        } else {
+            $image_id = null;
+        }
+    }
     
     $slug = generateUniqueSlug($title, $koneksi, $article_id);
     
@@ -226,8 +352,6 @@ try {
         error_log("Editing existing article:");
         error_log("  Old status: " . $old_status);
         error_log("  Old image ID: " . ($old_image_id ?? 'NULL'));
-        error_log("  Old image filename: " . ($old_image_filename ?? 'NULL'));
-        error_log("  Old image URL: " . ($old_image_url ?? 'NULL'));
     }
     
     // Determine new status and folder
@@ -250,10 +374,9 @@ try {
     mysqli_begin_transaction($koneksi);
     
     try {
-        // ==========================================
-        // CRITICAL: Handle image movement FIRST
-        // ==========================================
+        // ===== CRITICAL: Handle image movement with validation =====
         if ($image_id) {
+            // Double-check image exists before proceeding
             $img_query = "SELECT filename, url FROM images WHERE id = ?";
             $img_stmt = mysqli_prepare($koneksi, $img_query);
             mysqli_stmt_bind_param($img_stmt, "i", $image_id);
@@ -266,10 +389,8 @@ try {
                 error_log("=== IMAGE MOVEMENT START ===");
                 error_log("Image ID: " . $image_id);
                 error_log("Filename: " . $current_filename);
-                error_log("Current URL in DB: " . $current_url);
-                error_log("Target folder: " . $target_folder);
                 
-                // Cari lokasi file saat ini
+                // Find current location
                 $folders = ['draft', 'pending', 'published', 'rejected'];
                 $current_folder = null;
                 
@@ -277,23 +398,18 @@ try {
                     $check_path = __DIR__ . '/../uploads/articles/' . $folder . '/' . $current_filename;
                     if (file_exists($check_path)) {
                         $current_folder = $folder;
-                        error_log("✓ Current image location: " . $folder);
-                        error_log("  File path: " . $check_path);
-                        error_log("  File size: " . filesize($check_path) . " bytes");
+                        error_log("✓ Current location: " . $folder);
                         break;
                     }
                 }
                 
                 if (!$current_folder) {
                     error_log("✗ WARNING: Image file not found in any folder!");
-                    error_log("  Searched folders: " . implode(', ', $folders));
-                    error_log("  This might cause issues. Continuing anyway...");
+                    throw new Exception('File gambar tidak ditemukan di server!');
                 } else {
-                    // Move image jika folder berubah - DENGAN DATABASE UPDATE
+                    // Move image if needed
                     if ($current_folder !== $target_folder) {
-                        error_log("➜ Image needs to be moved:");
-                        error_log("  From: '{$current_folder}'");
-                        error_log("  To: '{$target_folder}'");
+                        error_log("→ Moving image: {$current_folder} → {$target_folder}");
                         
                         try {
                             $move_result = moveArticleImageWithDbUpdate(
@@ -304,81 +420,17 @@ try {
                             );
                             
                             if ($move_result && isset($move_result['success']) && $move_result['success']) {
-                                error_log("✓ IMAGE MOVE SUCCESSFUL");
-                                error_log("  From: {$current_folder}");
-                                error_log("  To: {$target_folder}");
-                                error_log("  New URL in DB: " . $move_result['new_url']);
-                                
-                                // Verify the physical move
-                                $new_path = __DIR__ . '/../uploads/articles/' . $target_folder . '/' . $current_filename;
-                                if (file_exists($new_path)) {
-                                    error_log("✓ Physical file verification: OK");
-                                    error_log("  Location: " . $new_path);
-                                    error_log("  Size: " . filesize($new_path) . " bytes");
-                                } else {
-                                    error_log("✗ Physical file verification: FAILED!");
-                                    error_log("  Expected at: " . $new_path);
-                                    throw new Exception("File verification failed after move");
-                                }
-                                
-                                // Verify database was updated
-                                $verify_query = "SELECT url FROM images WHERE id = ?";
-                                $verify_stmt = mysqli_prepare($koneksi, $verify_query);
-                                mysqli_stmt_bind_param($verify_stmt, "i", $image_id);
-                                mysqli_stmt_execute($verify_stmt);
-                                mysqli_stmt_bind_result($verify_stmt, $verified_url);
-                                
-                                if (mysqli_stmt_fetch($verify_stmt)) {
-                                    error_log("✓ Database URL verification: OK");
-                                    error_log("  URL in DB: " . $verified_url);
-                                    
-                                    if ($verified_url !== $move_result['new_url']) {
-                                        error_log("✗ WARNING: URL mismatch!");
-                                        error_log("  Expected: " . $move_result['new_url']);
-                                        error_log("  Got: " . $verified_url);
-                                    }
-                                } else {
-                                    error_log("✗ Database URL verification: FAILED!");
-                                }
-                                mysqli_stmt_close($verify_stmt);
-                                
+                                error_log("✓ Image moved successfully");
                             } else {
-                                error_log("✗ IMAGE MOVE FAILED");
-                                error_log("  Move result: " . json_encode($move_result));
-                                throw new Exception("Failed to move image from {$current_folder} to {$target_folder}");
+                                error_log("✗ Image move failed");
+                                throw new Exception('Gagal memindahkan gambar ke folder yang sesuai!');
                             }
                         } catch (Exception $e) {
-                            error_log("✗ IMAGE MOVE EXCEPTION");
-                            error_log("  Error: " . $e->getMessage());
-                            error_log("  Trace: " . $e->getTraceAsString());
+                            error_log("✗ IMAGE MOVE EXCEPTION: " . $e->getMessage());
                             throw $e;
                         }
                     } else {
-                        error_log("✓ Image already in correct folder: " . $target_folder);
-                        
-                        // Verify URL is correct even if file is in right folder
-                        $expected_url = 'https://inievan.my.id/project/uploads/articles/' . $target_folder . '/' . $current_filename;
-                        
-                        if ($current_url !== $expected_url) {
-                            error_log("⚠ URL MISMATCH DETECTED (file in correct folder but wrong URL)");
-                            error_log("  Current URL in DB: " . $current_url);
-                            error_log("  Expected URL: " . $expected_url);
-                            error_log("  Correcting URL in database...");
-                            
-                            $update_url = "UPDATE images SET url = ? WHERE id = ?";
-                            $url_stmt = mysqli_prepare($koneksi, $update_url);
-                            mysqli_stmt_bind_param($url_stmt, "si", $expected_url, $image_id);
-                            
-                            if (mysqli_stmt_execute($url_stmt)) {
-                                $affected = mysqli_stmt_affected_rows($url_stmt);
-                                error_log("✓ Database URL corrected (affected rows: {$affected})");
-                            } else {
-                                error_log("✗ Failed to correct URL: " . mysqli_error($koneksi));
-                            }
-                            mysqli_stmt_close($url_stmt);
-                        } else {
-                            error_log("✓ URL in database is already correct");
-                        }
+                        error_log("✓ Image already in correct folder");
                     }
                 }
                 
@@ -386,49 +438,79 @@ try {
                 
             } else {
                 mysqli_stmt_close($img_stmt);
-                error_log("✗ WARNING: Image ID provided but couldn't fetch image details");
+                error_log("✗ CRITICAL: Image ID {$image_id} not found during fetch!");
+                throw new Exception('Gambar tidak ditemukan dalam database!');
             }
-        } else {
-            error_log("No image associated with this article");
         }
         
-        // ==========================================
-        // Update or insert article
-        // ==========================================
+        // ===== Update or insert article =====
         if ($article_id) {
-            // UPDATE existing article
             error_log("Updating existing article ID: " . $article_id);
             
-            $article_query = "UPDATE articles SET 
-                title = ?, 
-                content = ?, 
-                meta_description = ?, 
-                category_id = ?, 
-                article_status = ?, 
-                approved_by = ?, 
-                approved_date = ?, 
-                featured_image_id = ?,
-                publication_date = NOW()
-                WHERE article_id = ? AND author_id = ?";
-            
-            $stmt = mysqli_prepare($koneksi, $article_query);
-            
-            if (!$stmt) {
-                throw new Exception('Database error: ' . mysqli_error($koneksi));
+            // CRITICAL FIX: Handle NULL image_id properly
+            if ($image_id) {
+                $article_query = "UPDATE articles SET 
+                    title = ?, 
+                    content = ?, 
+                    meta_description = ?, 
+                    category_id = ?, 
+                    article_status = ?, 
+                    approved_by = ?, 
+                    approved_date = ?, 
+                    featured_image_id = ?,
+                    publication_date = NOW()
+                    WHERE article_id = ? AND author_id = ?";
+                
+                $stmt = mysqli_prepare($koneksi, $article_query);
+                
+                if (!$stmt) {
+                    throw new Exception('Database error: ' . mysqli_error($koneksi));
+                }
+                
+                mysqli_stmt_bind_param($stmt, "sssisssiii",
+                    $title, 
+                    $content, 
+                    $meta_desc, 
+                    $category_id, 
+                    $new_status, 
+                    $approved_by, 
+                    $approved_date, 
+                    $image_id,
+                    $article_id,
+                    $_SESSION['user_id']
+                );
+            } else {
+                // Update without image
+                $article_query = "UPDATE articles SET 
+                    title = ?, 
+                    content = ?, 
+                    meta_description = ?, 
+                    category_id = ?, 
+                    article_status = ?, 
+                    approved_by = ?, 
+                    approved_date = ?, 
+                    featured_image_id = NULL,
+                    publication_date = NOW()
+                    WHERE article_id = ? AND author_id = ?";
+                
+                $stmt = mysqli_prepare($koneksi, $article_query);
+                
+                if (!$stmt) {
+                    throw new Exception('Database error: ' . mysqli_error($koneksi));
+                }
+                
+                mysqli_stmt_bind_param($stmt, "ssisssii",
+                    $title, 
+                    $content, 
+                    $meta_desc, 
+                    $category_id, 
+                    $new_status, 
+                    $approved_by, 
+                    $approved_date,
+                    $article_id,
+                    $_SESSION['user_id']
+                );
             }
-            
-            mysqli_stmt_bind_param($stmt, "sssisssiii",
-                $title, 
-                $content, 
-                $meta_desc, 
-                $category_id, 
-                $new_status, 
-                $approved_by, 
-                $approved_date, 
-                $image_id,
-                $article_id,
-                $_SESSION['user_id']
-            );
             
             if (!mysqli_stmt_execute($stmt)) {
                 throw new Exception('Failed to update article: ' . mysqli_error($koneksi));
@@ -445,44 +527,75 @@ try {
             if ($slug_stmt) {
                 mysqli_stmt_bind_param($slug_stmt, "si", $slug, $article_id);
                 mysqli_stmt_execute($slug_stmt);
-                error_log("Slug updated: " . $slug);
                 mysqli_stmt_close($slug_stmt);
             }
             
         } else {
-            // INSERT new article
             error_log("Inserting new article");
             
-            $article_query = "INSERT INTO articles (
-                title, 
-                content, 
-                meta_description, 
-                category_id, 
-                author_id,
-                article_status, 
-                approved_by, 
-                approved_date, 
-                featured_image_id, 
-                publication_date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
-            
-            $stmt = mysqli_prepare($koneksi, $article_query);
-            
-            if (!$stmt) {
-                throw new Exception('Database error: ' . mysqli_error($koneksi));
+            // CRITICAL FIX: Handle NULL image_id
+            if ($image_id) {
+                $article_query = "INSERT INTO articles (
+                    title, 
+                    content, 
+                    meta_description, 
+                    category_id, 
+                    author_id,
+                    article_status, 
+                    approved_by, 
+                    approved_date, 
+                    featured_image_id, 
+                    publication_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+                
+                $stmt = mysqli_prepare($koneksi, $article_query);
+                
+                if (!$stmt) {
+                    throw new Exception('Database error: ' . mysqli_error($koneksi));
+                }
+                
+                mysqli_stmt_bind_param($stmt, "ssssisssi",
+                    $title, 
+                    $content, 
+                    $meta_desc, 
+                    $category_id,
+                    $_SESSION['user_id'], 
+                    $new_status, 
+                    $approved_by, 
+                    $approved_date, 
+                    $image_id
+                );
+            } else {
+                $article_query = "INSERT INTO articles (
+                    title, 
+                    content, 
+                    meta_description, 
+                    category_id, 
+                    author_id,
+                    article_status, 
+                    approved_by, 
+                    approved_date, 
+                    featured_image_id, 
+                    publication_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NOW())";
+                
+                $stmt = mysqli_prepare($koneksi, $article_query);
+                
+                if (!$stmt) {
+                    throw new Exception('Database error: ' . mysqli_error($koneksi));
+                }
+                
+                mysqli_stmt_bind_param($stmt, "ssssisss",
+                    $title, 
+                    $content, 
+                    $meta_desc, 
+                    $category_id,
+                    $_SESSION['user_id'], 
+                    $new_status, 
+                    $approved_by, 
+                    $approved_date
+                );
             }
-            
-            mysqli_stmt_bind_param($stmt, "ssssisssi",
-                $title, 
-                $content, 
-                $meta_desc, 
-                $category_id,
-                $_SESSION['user_id'], 
-                $new_status, 
-                $approved_by, 
-                $approved_date, 
-                $image_id
-            );
             
             if (!mysqli_stmt_execute($stmt)) {
                 throw new Exception('Failed to save article: ' . mysqli_error($koneksi));
@@ -500,7 +613,6 @@ try {
             if (!mysqli_stmt_execute($slug_stmt)) {
                 throw new Exception('Failed to save slug: ' . mysqli_error($koneksi));
             }
-            error_log("Slug created: " . $slug);
             mysqli_stmt_close($slug_stmt);
         }
         
@@ -511,7 +623,6 @@ try {
             if ($img_stmt) {
                 mysqli_stmt_bind_param($img_stmt, "ii", $article_id, $image_id);
                 mysqli_stmt_execute($img_stmt);
-                error_log("Image source updated to article ID: " . $article_id);
                 mysqli_stmt_close($img_stmt);
             }
         }
@@ -524,13 +635,11 @@ try {
                 if ($delete_stmt) {
                     mysqli_stmt_bind_param($delete_stmt, "i", $article_id);
                     mysqli_stmt_execute($delete_stmt);
-                    error_log("Old tags deleted");
                     mysqli_stmt_close($delete_stmt);
                 }
             }
             
             $tag_array = array_filter(array_map('trim', explode(',', $tags)));
-            error_log("Processing " . count($tag_array) . " tags");
             
             foreach ($tag_array as $tag_name) {
                 if (empty($tag_name) || strlen($tag_name) > 50) continue;
@@ -558,12 +667,10 @@ try {
                             mysqli_stmt_bind_param($tag_stmt, "ss", $tag_name, $tag_slug);
                             mysqli_stmt_execute($tag_stmt);
                             $tag_id = mysqli_insert_id($koneksi);
-                            error_log("Created new tag: " . $tag_name);
                             mysqli_stmt_close($tag_stmt);
                         }
                     } else {
                         mysqli_stmt_close($tag_stmt);
-                        error_log("Using existing tag: " . $tag_name);
                     }
                     
                     if (isset($tag_id)) {
@@ -579,35 +686,8 @@ try {
             }
         }
         
-        // COMMIT TRANSACTION
         mysqli_commit($koneksi);
-        
         error_log("=== TRANSACTION COMMITTED SUCCESSFULLY ===");
-        
-        // Final verification
-        if ($image_id) {
-            $final_check = "SELECT url FROM images WHERE id = ?";
-            $check_stmt = mysqli_prepare($koneksi, $final_check);
-            mysqli_stmt_bind_param($check_stmt, "i", $image_id);
-            mysqli_stmt_execute($check_stmt);
-            mysqli_stmt_bind_result($check_stmt, $final_url);
-            
-            if (mysqli_stmt_fetch($check_stmt)) {
-                error_log("✓ FINAL VERIFICATION:");
-                error_log("  Image ID: " . $image_id);
-                error_log("  Final URL in DB: " . $final_url);
-                error_log("  Expected folder: " . $target_folder);
-                
-                if (strpos($final_url, '/' . $target_folder . '/') !== false) {
-                    error_log("  Status: ✓ CORRECT");
-                } else {
-                    error_log("  Status: ✗ MISMATCH!");
-                }
-            }
-            mysqli_stmt_close($check_stmt);
-        }
-        
-        error_log("=== SUBMIT ARTICLE SUCCESS ===");
         
     } catch (Exception $e) {
         mysqli_rollback($koneksi);

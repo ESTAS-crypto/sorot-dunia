@@ -1,103 +1,355 @@
-<?php
-$baseUrl = 'https://inievan.my.id/project';
-$current_page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
+<!-- Footer Scripts untuk Forgot Password -->
+<script>
+// ========================================
+// GLOBAL UTILITY FUNCTIONS
+// ========================================
 
-// Get site info from settings
-$siteInfo = getSiteInfo();
-?>
-<!-- Footer -->
-<footer class="footer">
-    <div class="container">
-        <div class="row">
-            <!-- Brand and Description -->
-            <div class="col-lg-4 col-md-6 mb-4">
-                <div class="mb-3">
-                    <a class="brand-logo" href="<?php echo $baseUrl; ?>">
-                        <img src="<?php echo $baseUrl; ?>/img/NewLogo.webp"
-                            alt="<?php echo htmlspecialchars($siteInfo['name']); ?> Logo"
-                            loading="lazy">
-                    </a>
-                </div>
-                <p><?php echo htmlspecialchars($siteInfo['description']); ?></p>
+// Cleanup Modal Backdrop Function - MUST BE DEFINED FIRST
+window.cleanupModalBackdrop = function() {
+    console.log('🧹 Cleaning up modal backdrops...');
+    
+    // Remove all modal backdrops
+    const backdrops = document.querySelectorAll('.modal-backdrop');
+    backdrops.forEach(backdrop => {
+        backdrop.remove();
+    });
+    
+    // Remove modal-open class from body
+    document.body.classList.remove('modal-open');
+    
+    // Reset body styles
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    
+    console.log('✅ Modal backdrops cleaned');
+};
+
+// Email validation helper
+function isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+}
+
+// Show alert helper
+function showAlert(alertElement, type, message) {
+    if (!alertElement) return;
+    
+    alertElement.className = `alert alert-${type}`;
+    const iconClass = type === 'success' ? 'check-circle' : 
+                     type === 'warning' ? 'exclamation-triangle' : 
+                     'exclamation-circle';
+    alertElement.innerHTML = `<i class="fas fa-${iconClass} me-2"></i>${message}`;
+    alertElement.classList.remove('d-none');
+    
+    // Auto hide after 8 seconds
+    setTimeout(() => {
+        alertElement.classList.add('d-none');
+    }, 8000);
+}
+
+// ========================================
+// MAIN INITIALIZATION
+// ========================================
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Footer scripts initialized');
+    
+    // ========================================
+    // FORGOT PASSWORD HANDLER - IMPROVED
+    // ========================================
+    const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+    const forgotPasswordAlert = document.getElementById('forgotPasswordAlert');
+    const emailStep = document.getElementById('emailStep');
+    const successStep = document.getElementById('successStep');
+    const sendResetLinkBtn = document.getElementById('sendResetLinkBtn');
+    const resendEmailBtn = document.getElementById('resendEmailBtn');
+    const countdownElement = document.getElementById('countdown');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    
+    let countdownInterval = null;
+    let lastEmail = '';
+    
+    // Forgot Password Form Submit with improved error handling
+    if (forgotPasswordForm) {
+        forgotPasswordForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            console.log('📧 Submitting forgot password form...');
+            
+            const formData = new FormData(forgotPasswordForm);
+            const email = formData.get('email');
+            lastEmail = email;
+            
+            // Validate email
+            if (!email || !isValidEmail(email)) {
+                showAlert(forgotPasswordAlert, 'danger', 'Masukkan email yang valid');
+                return;
+            }
+            
+            // Show loading
+            sendResetLinkBtn.disabled = true;
+            sendResetLinkBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Mengirim...';
+            if (loadingOverlay) loadingOverlay.classList.add('show');
+            
+            try {
+                console.log('🔄 Sending request to server...');
+                console.log('📍 URL:', 'ajax/forgot_password_handler.php');
+                console.log('📧 Email:', email);
                 
-                <!-- Social Media Icons -->
-                <div class="social-icons justify-content-start">
-                    <a href="https://github.com/ESTAS-crypto" target="_blank" rel="noopener noreferrer" title="GitHub">
-                        <i class="bi bi-github"></i>
-                    </a>
-                    <a href="https://www.instagram.com/evanatharasya.x/" target="_blank" rel="noopener noreferrer" title="Instagram">
-                        <i class="bi bi-instagram"></i>
-                    </a>
-                    <a href="https://x.com/EAtharasya" target="_blank" rel="noopener noreferrer" title="Twitter/X">
-                        <i class="bi bi-twitter-x"></i>
-                    </a>
-                </div>
-            </div>
-
-            <!-- Categories -->
-            <div class="col-lg-2 col-md-3 col-sm-6 mb-4">
-                <h5><i class="fas fa-list me-2"></i>Kategori</h5>
-                <ul class="list-unstyled">
-                    <?php
-                    if ($koneksi) {
-                        $categories_query = "SELECT name FROM categories ORDER BY name LIMIT 5";
-                        $categories_result = mysqli_query($koneksi, $categories_query);
-                        
-                        if ($categories_result && mysqli_num_rows($categories_result) > 0) {
-                            while ($category = mysqli_fetch_assoc($categories_result)) {
-                                echo '<li><a href="#">' . htmlspecialchars($category['name']) . '</a></li>';
-                            }
-                        } else {
-                            echo '<li><a href="#">Politik</a></li>';
-                            echo '<li><a href="#">Ekonomi</a></li>';
-                            echo '<li><a href="#">Olahraga</a></li>';
-                            echo '<li><a href="#">Teknologi</a></li>';
-                            echo '<li><a href="#">Hiburan</a></li>';
+                const response = await fetch('ajax/forgot_password_handler.php', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                console.log('📡 Response status:', response.status);
+                console.log('📡 Response statusText:', response.statusText);
+                console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+                
+                // Check content type
+                const contentType = response.headers.get('content-type');
+                console.log('📄 Content-Type:', contentType);
+                
+                if (!response.ok) {
+                    console.error('❌ HTTP error! status:', response.status);
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                // Get response text first
+                const responseText = await response.text();
+                console.log('📄 Response text length:', responseText.length);
+                console.log('📄 Response text (first 500 chars):', responseText.substring(0, 500));
+                
+                // Try to parse as JSON
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                    console.log('✅ Parsed JSON successfully:', result);
+                } catch (parseError) {
+                    console.error('❌ JSON parse error:', parseError);
+                    console.error('❌ Parse error message:', parseError.message);
+                    console.error('❌ Full response text:', responseText);
+                    
+                    // Try to find JSON in response
+                    const jsonMatch = responseText.match(/\{[^]*\}/);
+                    if (jsonMatch) {
+                        console.log('🔍 Found JSON pattern in response');
+                        try {
+                            result = JSON.parse(jsonMatch[0]);
+                            console.log('✅ Extracted and parsed JSON:', result);
+                        } catch (e) {
+                            console.error('❌ Failed to parse extracted JSON:', e);
+                            throw new Error('Server mengembalikan response yang tidak valid. Response: ' + responseText.substring(0, 200));
+                        }
+                    } else {
+                        throw new Error('Server mengembalikan response yang tidak valid (bukan JSON). Response: ' + responseText.substring(0, 200));
+                    }
+                }
+                
+                if (loadingOverlay) loadingOverlay.classList.remove('show');
+                
+                if (result.success) {
+                    console.log('✅ Password reset request successful');
+                    
+                    // Hide email step, show success step
+                    if (emailStep) emailStep.classList.add('d-none');
+                    if (successStep) successStep.classList.remove('d-none');
+                    
+                    // Start countdown
+                    startCountdown(60);
+                } else {
+                    console.warn('⚠️ Request failed:', result.message);
+                    showAlert(forgotPasswordAlert, 'danger', result.message || 'Terjadi kesalahan');
+                    sendResetLinkBtn.disabled = false;
+                    sendResetLinkBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Kirim Link Reset';
+                }
+            } catch (error) {
+                console.error('❌ Forgot password error:', error);
+                console.error('❌ Error name:', error.name);
+                console.error('❌ Error message:', error.message);
+                console.error('❌ Error stack:', error.stack);
+                
+                if (loadingOverlay) loadingOverlay.classList.remove('show');
+                
+                let errorMessage = 'Terjadi kesalahan: ';
+                if (error.message.includes('HTTP error')) {
+                    errorMessage += 'Server error (500). Silakan cek konfigurasi server atau hubungi admin.';
+                } else if (error.message.includes('JSON') || error.message.includes('tidak valid')) {
+                    errorMessage += 'Format response tidak valid. Silakan hubungi admin untuk memeriksa file PHP.';
+                } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorMessage += 'Gagal terhubung ke server. Periksa koneksi internet Anda.';
+                } else {
+                    errorMessage += error.message;
+                }
+                
+                showAlert(forgotPasswordAlert, 'danger', errorMessage);
+                sendResetLinkBtn.disabled = false;
+                sendResetLinkBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Kirim Link Reset';
+            }
+        });
+    }
+    
+    // Resend Email Handler
+    if (resendEmailBtn) {
+        resendEmailBtn.addEventListener('click', async function() {
+            if (resendEmailBtn.disabled) return;
+            
+            console.log('🔄 Resending email...');
+            resendEmailBtn.disabled = true;
+            resendEmailBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Mengirim...';
+            if (loadingOverlay) loadingOverlay.classList.add('show');
+            
+            const formData = new FormData();
+            formData.append('email', lastEmail);
+            
+            try {
+                const response = await fetch('ajax/forgot_password_handler.php', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                const responseText = await response.text();
+                let result;
+                
+                try {
+                    result = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('❌ JSON parse error on resend:', parseError);
+                    const jsonMatch = responseText.match(/\{[^]*\}/);
+                    if (jsonMatch) {
+                        result = JSON.parse(jsonMatch[0]);
+                    } else {
+                        throw new Error('Server response tidak valid');
+                    }
+                }
+                
+                if (loadingOverlay) loadingOverlay.classList.remove('show');
+                
+                if (result.success) {
+                    console.log('✅ Email resent successfully');
+                    
+                    // Reset countdown
+                    startCountdown(60);
+                    
+                    // Show success message
+                    const successAlert = document.createElement('div');
+                    successAlert.className = 'alert alert-success mt-3';
+                    successAlert.innerHTML = '<i class="fas fa-check-circle me-2"></i>Email telah dikirim ulang!';
+                    if (successStep) {
+                        const gridElement = successStep.querySelector('.d-grid');
+                        if (gridElement) {
+                            gridElement.before(successAlert);
                         }
                     }
-                    ?>
-                </ul>
-            </div>
-
-            <!-- Pages -->
-            <div class="col-lg-2 col-md-3 col-sm-6 mb-4">
-                <h5><i class="fas fa-sitemap me-2"></i>Halaman</h5>
-                <ul class="list-unstyled">
-                    <li><a href="<?php echo $baseUrl; ?>"><i class="fas fa-home me-2"></i>Beranda</a></li>
-                    <li><a href="<?php echo $baseUrl; ?>/berita.php"><i class="fas fa-newspaper me-2"></i>Berita</a></li>
-                    <li><a href="#"><i class="fas fa-envelope me-2"></i>Kontak</a></li>
-                </ul>
-            </div>
-
-            <!-- Contact Information -->
-            <div class="col-lg-4 col-md-6 mb-4">
-                <h5><i class="fas fa-address-book me-2"></i>Kontak</h5>
-                <div class="contact-info">
-                    <p><i class="fas fa-envelope me-2 text-primary"></i><?php echo htmlspecialchars($siteInfo['admin_email']); ?></p>
-                    <p><i class="fas fa-phone me-2 text-success"></i>+62 895-3858-90629</p>
-                    <p><i class="fas fa-map-marker-alt me-2 text-danger"></i>Surabaya, Indonesia</p>
-                    <p><i class="fas fa-school me-2 text-info"></i>SMKN 2 SURABAYA</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Footer Bottom -->
-        <div class="footer-bottom">
-            <div class="row align-items-center">
-                <div class="col-md-6 text-center text-md-start">
-                    <p>&copy; 2025 <?php echo htmlspecialchars($siteInfo['name']); ?>. All rights reserved.</p>
-                </div>
-                <div class="col-md-6 text-center text-md-end">
-                    <p>Created by <strong>Evan Atharasya</strong> - SMKN 2 SURABAYA</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</footer>
-
-<!-- Modal Authentication Scripts -->
-<script>
-document.addEventListener('DOMContentLoaded', function() {
+                    
+                    setTimeout(() => {
+                        successAlert.remove();
+                    }, 3000);
+                } else {
+                    alert('Gagal mengirim ulang email: ' + result.message);
+                    resendEmailBtn.disabled = false;
+                    resendEmailBtn.innerHTML = '<i class="fas fa-redo me-2"></i>Kirim Ulang Email';
+                }
+            } catch (error) {
+                console.error('❌ Resend email error:', error);
+                if (loadingOverlay) loadingOverlay.classList.remove('show');
+                alert('Terjadi kesalahan: ' + error.message);
+                resendEmailBtn.disabled = false;
+                resendEmailBtn.innerHTML = '<i class="fas fa-redo me-2"></i>Kirim Ulang Email';
+            }
+        });
+    }
+    
+    // Countdown Timer
+    function startCountdown(seconds) {
+        let timeLeft = seconds;
+        
+        // Clear existing interval
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+        }
+        
+        // Update countdown display
+        if (countdownElement) {
+            countdownElement.textContent = timeLeft;
+        }
+        
+        // Disable resend button
+        if (resendEmailBtn) {
+            resendEmailBtn.disabled = true;
+            resendEmailBtn.style.opacity = '0.6';
+            resendEmailBtn.style.cursor = 'not-allowed';
+        }
+        
+        countdownInterval = setInterval(() => {
+            timeLeft--;
+            if (countdownElement) {
+                countdownElement.textContent = timeLeft;
+            }
+            
+            if (timeLeft <= 0) {
+                clearInterval(countdownInterval);
+                
+                // Enable resend button
+                if (resendEmailBtn) {
+                    resendEmailBtn.disabled = false;
+                    resendEmailBtn.style.opacity = '1';
+                    resendEmailBtn.style.cursor = 'pointer';
+                    resendEmailBtn.innerHTML = '<i class="fas fa-redo me-2"></i>Kirim Ulang Email';
+                }
+                
+                // Hide countdown timer
+                const countdownTimer = document.getElementById('countdownTimer');
+                if (countdownTimer) {
+                    countdownTimer.style.display = 'none';
+                }
+            }
+        }, 1000);
+    }
+    
+    // Reset form when modal is closed
+    const forgotPasswordModal = document.getElementById('forgotPasswordModal');
+    if (forgotPasswordModal) {
+        forgotPasswordModal.addEventListener('hidden.bs.modal', function() {
+            console.log('🔒 Forgot password modal closed');
+            
+            // Reset form
+            if (forgotPasswordForm) {
+                forgotPasswordForm.reset();
+            }
+            
+            // Hide alerts
+            if (forgotPasswordAlert) {
+                forgotPasswordAlert.classList.add('d-none');
+            }
+            
+            // Show email step, hide success step
+            if (emailStep) {
+                emailStep.classList.remove('d-none');
+            }
+            if (successStep) {
+                successStep.classList.add('d-none');
+            }
+            
+            // Reset button
+            if (sendResetLinkBtn) {
+                sendResetLinkBtn.disabled = false;
+                sendResetLinkBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Kirim Link Reset';
+            }
+            
+            // Clear countdown
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            
+            // Cleanup modal backdrop
+            window.cleanupModalBackdrop();
+        });
+    }
+    
     // ========================================
     // PASSWORD STRENGTH CHECKER
     // ========================================
@@ -151,43 +403,48 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateRequirement(element, isValid) {
+        if (!element) return;
         const icon = element.querySelector('i');
         if (isValid) {
             element.classList.remove('invalid');
             element.classList.add('valid');
-            icon.className = 'fas fa-check-circle';
+            if (icon) icon.className = 'fas fa-check-circle';
         } else {
             element.classList.remove('valid');
             element.classList.add('invalid');
-            icon.className = 'fas fa-times-circle';
+            if (icon) icon.className = 'fas fa-times-circle';
         }
     }
     
     function updateStrengthUI(score) {
+        if (!strengthMeter) return;
+        
         // Remove all strength classes
         strengthMeter.classList.remove('strength-weak', 'strength-medium', 'strength-strong');
         
         if (score === 0) {
-            strengthText.innerHTML = '';
+            if (strengthText) strengthText.innerHTML = '';
             return;
         }
         
         if (score <= 2) {
             strengthMeter.classList.add('strength-weak');
-            strengthText.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span>Password Lemah</span>';
+            if (strengthText) strengthText.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span>Password Lemah</span>';
             passwordStrength = 1;
         } else if (score <= 4) {
             strengthMeter.classList.add('strength-medium');
-            strengthText.innerHTML = '<i class="fas fa-shield-alt"></i><span>Password Sedang</span>';
+            if (strengthText) strengthText.innerHTML = '<i class="fas fa-shield-alt"></i><span>Password Sedang</span>';
             passwordStrength = 2;
         } else {
             strengthMeter.classList.add('strength-strong');
-            strengthText.innerHTML = '<i class="fas fa-shield-alt"></i><span>Password Kuat</span>';
+            if (strengthText) strengthText.innerHTML = '<i class="fas fa-shield-alt"></i><span>Password Kuat</span>';
             passwordStrength = 3;
         }
     }
     
     function checkPasswordMatch() {
+        if (!registerPassword || !confirmPassword || !passwordMatchMessage) return;
+        
         const password = registerPassword.value;
         const confirm = confirmPassword.value;
         
@@ -209,6 +466,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateSubmitButton() {
+        if (!registerPassword || !registerSubmitBtn) return;
+        
         const result = checkPasswordStrength(registerPassword.value);
         const allRequirementsMet = Object.values(result.requirements).every(req => req === true);
         
@@ -265,6 +524,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (result.success) {
                     showAlert(loginAlert, 'success', result.message);
                     setTimeout(() => {
+                        // Close modal properly
+                        const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+                        if (loginModal) {
+                            loginModal.hide();
+                        }
+                        window.cleanupModalBackdrop();
+                        
+                        // Reload page
                         window.location.reload();
                     }, 1000);
                 } else {
@@ -307,26 +574,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check password strength
             const result = checkPasswordStrength(password);
             if (result.score < 5) {
-                showAlert(registerAlert, 'warning', 'Password terlalu lemah. Harap penuhi semua persyaratan password untuk keamanan akun Anda.');
-                return;
-            }
-            
-            // Validate username
-            const username = formData.get('username');
-            if (username.length < 3) {
-                showAlert(registerAlert, 'danger', 'Username harus minimal 3 karakter');
-                return;
-            }
-            
-            if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-                showAlert(registerAlert, 'danger', 'Username hanya boleh mengandung huruf, angka, dan underscore');
-                return;
-            }
-            
-            // Validate full name
-            const fullName = formData.get('full_name');
-            if (fullName.length < 3) {
-                showAlert(registerAlert, 'danger', 'Nama lengkap harus minimal 3 karakter');
+                showAlert(registerAlert, 'warning', 'Password terlalu lemah. Harap penuhi semua persyaratan password.');
                 return;
             }
             
@@ -347,18 +595,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     registerForm.reset();
                     
                     // Reset password strength UI
-                    strengthMeter.classList.remove('strength-weak', 'strength-medium', 'strength-strong');
-                    strengthText.innerHTML = '';
-                    passwordMatchMessage.innerHTML = '';
-                    
-                    // Reset all requirements
-                    [reqLength, reqUppercase, reqLowercase, reqNumber, reqSpecial].forEach(req => {
-                        updateRequirement(req, false);
-                    });
+                    if (strengthMeter) {
+                        strengthMeter.classList.remove('strength-weak', 'strength-medium', 'strength-strong');
+                        if (strengthText) strengthText.innerHTML = '';
+                        if (passwordMatchMessage) passwordMatchMessage.innerHTML = '';
+                    }
                     
                     setTimeout(() => {
                         const registerModal = bootstrap.Modal.getInstance(document.getElementById('registerModal'));
-                        registerModal.hide();
+                        if (registerModal) {
+                            registerModal.hide();
+                        }
+                        window.cleanupModalBackdrop();
                         
                         const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
                         loginModal.show();
@@ -377,226 +625,89 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // ========================================
-    // HELPER FUNCTIONS
-    // ========================================
-    function showAlert(alertElement, type, message) {
-        alertElement.className = `alert alert-${type}`;
-        const iconClass = type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'exclamation-circle';
-        alertElement.innerHTML = `<i class="fas fa-${iconClass} me-2"></i>${message}`;
-        alertElement.classList.remove('d-none');
-        
-        // Auto hide after 5 seconds
-        setTimeout(() => {
-            alertElement.classList.add('d-none');
-        }, 5000);
-    }
-    
     // Clear alerts when modals are closed
-    document.getElementById('loginModal')?.addEventListener('hidden.bs.modal', function() {
-        loginAlert?.classList.add('d-none');
-        loginForm?.reset();
-    });
+    const loginModal = document.getElementById('loginModal');
+    if (loginModal) {
+        loginModal.addEventListener('hidden.bs.modal', function() {
+            if (loginAlert) loginAlert.classList.add('d-none');
+            if (loginForm) loginForm.reset();
+            window.cleanupModalBackdrop();
+        });
+    }
     
-    document.getElementById('registerModal')?.addEventListener('hidden.bs.modal', function() {
-        registerAlert?.classList.add('d-none');
-        registerForm?.reset();
-        
-        // Reset password strength UI
-        if (strengthMeter) {
-            strengthMeter.classList.remove('strength-weak', 'strength-medium', 'strength-strong');
-            strengthText.innerHTML = '';
-            passwordMatchMessage.innerHTML = '';
-        }
-        
-        // Reset all requirements
-        if (reqLength) {
-            [reqLength, reqUppercase, reqLowercase, reqNumber, reqSpecial].forEach(req => {
-                updateRequirement(req, false);
-            });
-        }
-    });
-    
-    // Character count for comment textarea
-    const textarea = document.querySelector('textarea[name="comment_content"]');
-    const charCount = document.getElementById('char-count');
-    
-    if (textarea && charCount) {
-        textarea.addEventListener('input', function() {
-            charCount.textContent = this.value.length;
+    const registerModal = document.getElementById('registerModal');
+    if (registerModal) {
+        registerModal.addEventListener('hidden.bs.modal', function() {
+            if (registerAlert) registerAlert.classList.add('d-none');
+            if (registerForm) registerForm.reset();
             
-            if (this.value.length > 900) {
-                charCount.style.color = 'red';
-            } else if (this.value.length > 800) {
-                charCount.style.color = 'orange';
-            } else {
-                charCount.style.color = '';
+            // Reset password strength UI
+            if (strengthMeter) {
+                strengthMeter.classList.remove('strength-weak', 'strength-medium', 'strength-strong');
+                if (strengthText) strengthText.innerHTML = '';
+                if (passwordMatchMessage) passwordMatchMessage.innerHTML = '';
             }
+            
+            window.cleanupModalBackdrop();
         });
     }
     
     // ========================================
-    // HERO CAROUSEL ENHANCEMENTS - PERBAIKAN
+    // CHECK FOR RESET SUCCESS MESSAGE
     // ========================================
-    const carouselItems = document.querySelectorAll('#heroCarousel .carousel-item');
-    
-    if (carouselItems.length > 0) {
-        console.log('Hero carousel enhancement initialized with', carouselItems.length, 'items');
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('reset') === 'success') {
+        // Show success message
+        const successAlert = document.createElement('div');
+        successAlert.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+        successAlert.style.zIndex = '9999';
+        successAlert.innerHTML = `
+            <i class="fas fa-check-circle me-2"></i>
+            Password berhasil direset! Silakan login dengan password baru Anda.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(successAlert);
         
-        carouselItems.forEach(item => {
-            // Prevent carousel controls from triggering item click
-            const controls = document.querySelectorAll('#heroCarousel .carousel-control-prev, #heroCarousel .carousel-control-next');
-            controls.forEach(control => {
-                control.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                });
-            });
-            
-            // Add visual feedback on hover
-            item.addEventListener('mouseenter', function() {
-                this.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-            });
-            
-            item.addEventListener('mouseleave', function() {
-                this.style.transform = 'scale(1)';
-                this.style.opacity = '1';
-            });
-            
-            // Add click feedback
-            item.addEventListener('click', function(e) {
-                // Ignore if clicking on control buttons
-                if (e.target.closest('.carousel-control-prev') || e.target.closest('.carousel-control-next')) {
-                    return;
-                }
-                
-                // Visual feedback
-                this.style.opacity = '0.9';
-                setTimeout(() => {
-                    this.style.opacity = '1';
-                }, 150);
-            });
-        });
+        // Auto dismiss after 5 seconds
+        setTimeout(() => {
+            successAlert.remove();
+        }, 5000);
         
-        // Pause carousel on hover
-        const carousel = document.getElementById('heroCarousel');
-        if (carousel) {
-            carousel.addEventListener('mouseenter', function() {
-                const bsCarousel = bootstrap.Carousel.getInstance(carousel);
-                if (bsCarousel) {
-                    bsCarousel.pause();
-                }
-            });
-            
-            carousel.addEventListener('mouseleave', function() {
-                const bsCarousel = bootstrap.Carousel.getInstance(carousel);
-                if (bsCarousel) {
-                    bsCarousel.cycle();
-                }
-            });
-        }
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        // Auto open login modal
+        setTimeout(() => {
+            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+            loginModal.show();
+        }, 1000);
     }
+    
+    console.log('✅ Footer scripts initialized successfully');
 });
-</script>
 
-<!-- Comments JS -->
-<script src="js/comments.js"></script>
+// Password toggle function
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    const icon = event.currentTarget.querySelector('i');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
+}
+</script>
+    
+<!-- Comments JS - Enhanced with Pagination -->
+<script src="js/comments.js?v=<?php echo time(); ?>"></script>
 
 <!-- Reactions JS -->
-<script src="js/reactions.js"></script>
-
-<!-- Ban Notification for Logged In Users -->
-<?php if (isset($is_logged_in) && $is_logged_in === true): ?>
-<script>
-(function() {
-    'use strict';
-
-    if (window.banNotificationSystemLoaded) {
-        console.log('Ban notification system already loaded, skipping...');
-        return;
-    }
-
-    window.banNotificationSystemLoaded = true;
-    console.log('Initializing ban notification for logged in user');
-
-    try {
-        document.body.classList.add('logged-in');
-        document.body.setAttribute('data-user-id', '<?php echo intval($_SESSION['user_id'] ?? $_SESSION['id'] ?? 0); ?>');
-        document.body.setAttribute('data-username', '<?php echo htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES); ?>');
-        document.body.setAttribute('data-page', 'footer');
-    } catch (e) {
-        console.warn('Could not set body attributes:', e);
-    }
-
-    function loadBanNotificationScript() {
-        return new Promise((resolve, reject) => {
-            const existingScript = document.querySelector('script[src*="notif-ban.js"]');
-            if (existingScript) {
-                console.log('Ban notification script already exists');
-                resolve();
-                return;
-            }
-
-            const script = document.createElement('script');
-            script.src = '<?php echo $baseUrl; ?>/js/notif-ban.js?v=' + Date.now();
-            script.async = true;
-            script.defer = true;
-            
-            script.onload = function() {
-                console.log('Ban notification script loaded successfully');
-                resolve();
-            };
-            
-            script.onerror = function(error) {
-                console.log('Ban notification script not available');
-                resolve();
-            };
-            
-            document.head.appendChild(script);
-        });
-    }
-
-    async function initializeBanNotification() {
-        try {
-            await loadBanNotificationScript();
-            
-            let attempts = 0;
-            const maxAttempts = 10;
-            
-            const checkManager = setInterval(() => {
-                attempts++;
-                
-                if (window.banNotificationManager && window.banNotificationManager.isInitialized) {
-                    clearInterval(checkManager);
-                    
-                    setTimeout(() => {
-                        console.log('Starting initial ban check');
-                        try {
-                            window.banNotificationManager.forceCheck();
-                        } catch (e) {
-                            console.log('Ban check failed:', e);
-                        }
-                    }, 2000);
-                    
-                } else if (attempts >= maxAttempts) {
-                    clearInterval(checkManager);
-                    console.log('Ban notification manager not available after', maxAttempts, 'attempts');
-                }
-            }, 500);
-            
-        } catch (error) {
-            console.log('Ban notification initialization failed:', error);
-        }
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeBanNotification);
-    } else {
-        initializeBanNotification();
-    }
-
-})();
-</script>
-<?php endif; ?>
+<script src="js/reactions.js?v=<?php echo time(); ?>"></script>
 
 <!-- Performance and Error Prevention Scripts -->
 <script>
@@ -625,8 +736,7 @@ window.addEventListener('unhandledrejection', function(event) {
     }
 });
 
-console.log('Footer scripts initialized successfully');
-console.log('Hero carousel enhancements loaded');
+console.log('✅ Error prevention active');
 </script>
 
 </body>

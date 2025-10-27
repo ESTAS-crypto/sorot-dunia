@@ -1,5 +1,5 @@
 <?php
-// admin/admin-login.php
+// admin/admin-login.php - FIXED VERSION
 session_start();
 
 // Enable error reporting
@@ -18,8 +18,7 @@ if (!$koneksi) {
 // Variables
 $login_error = '';
 $logout_message = '';
-$debug_info = array();
-$show_debug = false; // Set true untuk debug pengecekan akun
+$session_expired = false;
 
 // Handle logout
 if (isset($_GET['action']) && $_GET['action'] === 'logout') {
@@ -30,9 +29,21 @@ if (isset($_GET['action']) && $_GET['action'] === 'logout') {
     exit();
 }
 
-// Check logout message
+// Check for logout message
 if (isset($_GET['logout']) && $_GET['logout'] === 'success') {
     $logout_message = 'Anda telah berhasil logout.';
+}
+
+// Check for session timeout
+if (isset($_GET['error'])) {
+    if ($_GET['error'] === 'session_timeout') {
+        $login_error = 'Sesi Anda telah berakhir. Silakan login kembali.';
+        $session_expired = true;
+    } elseif ($_GET['error'] === 'not_admin') {
+        $login_error = 'Akses ditolak. Hanya admin yang dapat login.';
+    } elseif ($_GET['error'] === 'security_error') {
+        $login_error = 'Terjadi kesalahan keamanan. Silakan login kembali.';
+    }
 }
 
 // Check if already logged in
@@ -42,6 +53,7 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_
         header("Location: index.php?page=dashboard");
         exit();
     } else {
+        // Clear session if not admin
         session_unset();
         session_destroy();
         session_start();
@@ -50,25 +62,15 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_
 
 // Process Login
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $debug_info[] = "=== FORM SUBMITTED ===";
-    $debug_info[] = "POST data received: " . (!empty($_POST) ? "Yes" : "No");
-    
     // Get form data
     $username_input = isset($_POST['username']) ? trim($_POST['username']) : '';
     $password_input = isset($_POST['password']) ? $_POST['password'] : '';
-    $remember = isset($_POST['remember']) ? true : false;
-    
-    $debug_info[] = "Username: " . htmlspecialchars($username_input);
-    $debug_info[] = "Password length: " . strlen($password_input);
-    $debug_info[] = "Remember me: " . ($remember ? "Yes" : "No");
     
     // Validate input
     if (empty($username_input)) {
         $login_error = 'Username atau email tidak boleh kosong!';
-        $debug_info[] = "ERROR: Username kosong";
     } elseif (empty($password_input)) {
         $login_error = 'Password tidak boleh kosong!';
-        $debug_info[] = "ERROR: Password kosong";
     } else {
         // Sanitize input
         $username_clean = mysqli_real_escape_string($koneksi, $username_input);
@@ -79,56 +81,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   WHERE (username = '$username_clean' OR email = '$username_clean') 
                   LIMIT 1";
         
-        $debug_info[] = "SQL Query: " . $query;
-        
         // Execute query
         $result = mysqli_query($koneksi, $query);
         
         if (!$result) {
             $login_error = 'Database error: ' . mysqli_error($koneksi);
-            $debug_info[] = "ERROR: " . mysqli_error($koneksi);
+            error_log("Login query error: " . mysqli_error($koneksi));
         } else {
             $num_rows = mysqli_num_rows($result);
-            $debug_info[] = "Rows found: " . $num_rows;
             
             if ($num_rows === 0) {
                 $login_error = 'Username atau email tidak ditemukan!';
-                $debug_info[] = "ERROR: User tidak ditemukan di database";
             } else {
                 $user = mysqli_fetch_assoc($result);
-                
-                // Log user data
-                $debug_info[] = "--- USER DATA ---";
-                $debug_info[] = "ID: " . $user['id'];
-                $debug_info[] = "Username: " . $user['username'];
-                $debug_info[] = "Email: " . $user['email'];
-                $debug_info[] = "Role (raw): '" . $user['role'] . "'";
-                $debug_info[] = "Is Banned: " . ($user['is_banned'] ? "Yes" : "No");
                 
                 // Check if banned
                 if ($user['is_banned'] == 1) {
                     $login_error = 'Akun Anda telah diblokir!';
-                    $debug_info[] = "ERROR: User is banned";
                 } else {
                     // Verify password
-                    $debug_info[] = "--- PASSWORD CHECK ---";
-                    $password_match = password_verify($password_input, $user['password']);
-                    $debug_info[] = "Password match: " . ($password_match ? "YES" : "NO");
-                    
-                    if ($password_match) {
+                    if (password_verify($password_input, $user['password'])) {
                         // Check role
                         $user_role = trim(strtolower($user['role']));
-                        $debug_info[] = "--- ROLE CHECK ---";
-                        $debug_info[] = "Role (cleaned): '$user_role'";
-                        $debug_info[] = "Is admin: " . ($user_role === 'admin' ? "YES" : "NO");
                         
                         if ($user_role === 'admin') {
-                            $debug_info[] = "--- ACCESS GRANTED ---";
-                            
                             // Clear any old session data
                             session_unset();
                             
-                            // Set new session
+                            // Regenerate session ID for security
+                            session_regenerate_id(true);
+                            
+                            // Set new session with admin data
                             $_SESSION['logged_in'] = true;
                             $_SESSION['user_id'] = (int)$user['id'];
                             $_SESSION['username'] = $user['username'];
@@ -136,51 +119,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $_SESSION['full_name'] = $user['full_name'];
                             $_SESSION['user_email'] = $user['email'];
                             $_SESSION['login_time'] = time();
+                            $_SESSION['last_activity'] = time();
                             
-                            $debug_info[] = "Session created successfully";
-                            $debug_info[] = "Session ID: " . session_id();
+                            // Log successful login
+                            error_log("Admin login successful: User ID " . $user['id'] . " - " . $user['username']);
                             
-                            // Remember me
-                            if ($remember) {
-                                $token = bin2hex(random_bytes(32));
-                                setcookie('remember_admin', $token, time() + (30 * 86400), '/', '', false, true);
-                                $debug_info[] = "Remember cookie set";
-                            }
-                            
-                            // Redirect
-                            $debug_info[] = "Redirecting to dashboard...";
-                            
-                            // Use JavaScript redirect as fallback
-                            echo '<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Login Success</title>
-</head>
-<body>
-    <script>
-        window.location.href = "index.php?page=dashboard";
-    </script>
-    <noscript>
-        <meta http-equiv="refresh" content="0;url=index.php?page=dashboard">
-    </noscript>
-</body>
-</html>';
+                            // Redirect to dashboard
+                            header("Location: index.php?page=dashboard");
                             exit();
                             
                         } elseif ($user_role === 'penulis') {
-                            $login_error = 'Akses Ditolak! Anda adalah PENULIS. Hanya ADMIN yang dapat login.';
-                            $debug_info[] = "ERROR: User is PENULIS, not ADMIN";
+                            $login_error = 'Akses Ditolak! Anda adalah PENULIS. Hanya ADMIN yang dapat login ke panel admin.';
                         } elseif ($user_role === 'pembaca') {
-                            $login_error = 'Akses Ditolak! Anda adalah PEMBACA. Hanya ADMIN yang dapat login.';
-                            $debug_info[] = "ERROR: User is PEMBACA, not ADMIN";
+                            $login_error = 'Akses Ditolak! Anda adalah PEMBACA. Hanya ADMIN yang dapat login ke panel admin.';
                         } else {
-                            $login_error = "Akses Ditolak! Role: '$user_role'. Hanya ADMIN yang dapat login.";
-                            $debug_info[] = "ERROR: Unknown role '$user_role'";
+                            $login_error = "Akses Ditolak! Role '$user_role' tidak dikenal. Hanya ADMIN yang dapat login.";
                         }
                     } else {
                         $login_error = 'Password salah!';
-                        $debug_info[] = "ERROR: Password tidak cocok";
                     }
                 }
             }
@@ -212,6 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             --accent-hover: #f0f0f0;
             --error: #ef4444;
             --success: #10b981;
+            --warning: #f59e0b;
             --input-text: #ffffff;
             --input-bg: #1a1a1a;
         }
@@ -374,6 +331,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             color: var(--input-text) !important;
         }
 
+        .form-control:focus + .input-icon {
+            color: var(--accent);
+        }
+
         .form-control:-webkit-autofill,
         .form-control:-webkit-autofill:hover,
         .form-control:-webkit-autofill:focus,
@@ -401,35 +362,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             color: var(--text-secondary);
         }
 
-        .remember-forgot {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 28px;
-        }
-
-        .form-check {
-            display: flex;
-            align-items: center;
-        }
-
-        .form-check-input {
-            width: 18px;
-            height: 18px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            cursor: pointer;
-            margin-right: 8px;
-        }
-
-        .form-check-label {
-            color: var(--text-secondary);
-            font-size: 14px;
-            cursor: pointer;
-            user-select: none;
-        }
-
         .btn-login {
             width: 100%;
             padding: 14px;
@@ -441,6 +373,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
+            margin-top: 8px;
         }
 
         .btn-login:hover {
@@ -461,11 +394,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size: 14px;
             border: 1px solid;
             animation: slideDown 0.4s ease-out;
+            display: flex;
+            align-items: center;
         }
 
         @keyframes slideDown {
             from { opacity: 0; transform: translateY(-10px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        .alert i {
+            font-size: 18px;
+            margin-right: 10px;
         }
 
         .alert-danger {
@@ -480,22 +420,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-color: rgba(16, 185, 129, 0.3);
         }
 
-        .debug-info {
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 20px;
-            font-size: 11px;
-            color: var(--text-muted);
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            line-height: 1.6;
-        }
-
-        .debug-info div {
-            margin-bottom: 4px;
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fcd34d;
+            border-color: rgba(245, 158, 11, 0.3);
         }
 
         .divider {
@@ -550,28 +478,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <i class="bi bi-shield-lock"></i>
                 </div>
                 <h1 class="login-title">Admin Login</h1>
-                <h2 class="login-title">Sorot Dunia</h2>
+                <h2 class="login-subtitle" style="font-size: 18px; margin-bottom: 4px;">Sorot Dunia</h2>
                 <p class="login-subtitle">Masuk ke Panel Administrator</p>
             </div>
 
-            <?php if ($show_debug && !empty($debug_info)): ?>
-            <div class="debug-info">
-                <strong style="color: var(--success);">DEBUG INFO:</strong><br><br>
-                <?php foreach ($debug_info as $info): ?>
-                    <div><?php echo htmlspecialchars($info); ?></div>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
-
             <?php if (!empty($login_error)): ?>
-            <div class="alert alert-danger">
-                <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($login_error); ?>
+            <div class="alert alert-<?php echo $session_expired ? 'warning' : 'danger'; ?>">
+                <i class="bi bi-<?php echo $session_expired ? 'clock-history' : 'exclamation-triangle'; ?>"></i>
+                <span><?php echo htmlspecialchars($login_error); ?></span>
             </div>
             <?php endif; ?>
 
             <?php if (!empty($logout_message)): ?>
             <div class="alert alert-success">
-                <i class="bi bi-check-circle me-2"></i><?php echo htmlspecialchars($logout_message); ?>
+                <i class="bi bi-check-circle"></i>
+                <span><?php echo htmlspecialchars($logout_message); ?></span>
             </div>
             <?php endif; ?>
 
@@ -579,46 +500,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="form-group">
                     <label class="form-label" for="username">Username atau Email</label>
                     <div class="input-wrapper">
-                        <i class="input-icon bi bi-person"></i>
                         <input 
                             type="text" 
                             class="form-control" 
                             id="username" 
                             name="username" 
-                            placeholder="Username Anda"
+                            placeholder="Masukkan username atau email"
                             required
+                            autofocus
                             value="<?php echo isset($_POST['username']) ? htmlspecialchars($_POST['username']) : ''; ?>"
                         >
+                        <i class="input-icon bi bi-person"></i>
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label" for="password">Password</label>
                     <div class="input-wrapper">
-                        <i class="input-icon bi bi-lock"></i>
                         <input 
                             type="password" 
                             class="form-control" 
                             id="password" 
                             name="password" 
-                            placeholder="Password Anda"
+                            placeholder="Masukkan password"
                             required
                         >
+                        <i class="input-icon bi bi-lock"></i>
                         <button type="button" class="password-toggle" id="togglePassword">
                             <i class="bi bi-eye"></i>
                         </button>
                     </div>
                 </div>
 
-                <div class="remember-forgot">
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="remember" name="remember">
-                        <label class="form-check-label" for="remember">Ingat saya</label>
-                    </div>
-                </div>
-
                 <button type="submit" class="btn-login" id="loginBtn">
-                    Masuk
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Masuk
                 </button>
 
                 <div class="divider">
@@ -636,16 +551,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script>
-        // Toggle password
-        document.getElementById('togglePassword')?.addEventListener('click', function() {
-            const pwd = document.getElementById('password');
-            pwd.type = pwd.type === 'password' ? 'text' : 'password';
-            this.querySelector('i').classList.toggle('bi-eye');
-            this.querySelector('i').classList.toggle('bi-eye-slash');
-        });
+        // Toggle password visibility
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+        
+        if (togglePassword) {
+            togglePassword.addEventListener('click', function() {
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                
+                const icon = this.querySelector('i');
+                icon.classList.toggle('bi-eye');
+                icon.classList.toggle('bi-eye-slash');
+            });
+        }
 
-        // Focus username
-        document.getElementById('username').focus();
+        // Form validation
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', function(e) {
+                const username = document.getElementById('username').value.trim();
+                const password = document.getElementById('password').value;
+                
+                if (!username || !password) {
+                    e.preventDefault();
+                    alert('Username dan password harus diisi!');
+                    return false;
+                }
+            });
+        }
+
+        // Auto-dismiss success message
+        <?php if (!empty($logout_message)): ?>
+        setTimeout(function() {
+            const successAlert = document.querySelector('.alert-success');
+            if (successAlert) {
+                successAlert.style.transition = 'opacity 0.5s ease';
+                successAlert.style.opacity = '0';
+                setTimeout(() => successAlert.remove(), 500);
+            }
+        }, 3000);
+        <?php endif; ?>
     </script>
 </body>
 </html>

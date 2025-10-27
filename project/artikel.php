@@ -1,12 +1,15 @@
 <?php
-// artikel.php - VERSI FINAL (Trending tetap tampil termasuk artikel yang dibuka)
+// artikel.php - VERSI COMPLETE DENGAN PREMIUM ACCESS SYSTEM + PAGINATION COMMENTS + MODAL LOGIN FIX
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 require_once 'config/config.php';
 
-error_log("Session data at start: " . print_r($_SESSION, true));
+// Enable error logging untuk debugging
+error_log("=== ARTIKEL.PHP START ===");
+error_log("Session data: " . print_r($_SESSION, true));
+error_log("GET params: " . print_r($_GET, true));
 
 $article_id = 0;
 $article_slug = '';
@@ -15,35 +18,42 @@ $show_404 = false;
 // Cek parameter slug (prioritas utama)
 if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     $article_slug = sanitize_input($_GET['slug']);
-    $slug_query = "SELECT GetArticleIdBySlug('$article_slug') as article_id";
+    error_log("Slug parameter: " . $article_slug);
+    
+    $slug_query = "SELECT related_id FROM slugs WHERE slug = '$article_slug' AND type = 'article' LIMIT 1";
     $slug_result = mysqli_query($koneksi, $slug_query);
     
-    if ($slug_result && $slug_row = mysqli_fetch_assoc($slug_result)) {
-        $article_id = (int)$slug_row['article_id'];
-    }
-    
-    if ($article_id <= 0) {
+    if ($slug_result && mysqli_num_rows($slug_result) > 0) {
+        $slug_row = mysqli_fetch_assoc($slug_result);
+        $article_id = (int)$slug_row['related_id'];
+        error_log("Found article_id from slug: " . $article_id);
+    } else {
+        error_log("Slug not found in database");
         $show_404 = true;
     }
 } 
 elseif (isset($_GET['id']) && !empty($_GET['id'])) {
     $article_id = (int)$_GET['id'];
+    error_log("ID parameter: " . $article_id);
     
     if ($article_id <= 0) {
         $show_404 = true;
     } else {
-        $id_to_slug_query = "SELECT GetArticleSlug($article_id) as slug";
+        // Redirect dari ID ke slug
+        $id_to_slug_query = "SELECT slug FROM slugs WHERE related_id = $article_id AND type = 'article' LIMIT 1";
         $id_result = mysqli_query($koneksi, $id_to_slug_query);
         
         if ($id_result && $id_row = mysqli_fetch_assoc($id_result)) {
             $found_slug = $id_row['slug'];
             if (!empty($found_slug)) {
+                error_log("Redirecting to slug: " . $found_slug);
                 header("Location: artikel.php?slug=" . urlencode($found_slug), true, 301);
                 exit();
             }
         }
     }
 } else {
+    error_log("No slug or id parameter");
     $show_404 = true;
 }
 
@@ -232,13 +242,15 @@ if ($show_404) {
     render404Page();
 }
 
-// QUERY artikel
+// QUERY artikel dengan EXPLICIT column selection
 $query = "SELECT 
             a.article_id, 
             a.title, 
             a.content, 
             a.publication_date,
             a.view_count,
+            a.post_status,
+            a.article_status,
             s.slug,
             u.full_name AS author_name, 
             u.username AS author_username,
@@ -248,25 +260,35 @@ $query = "SELECT
             i.url AS image_url, 
             i.filename AS image_filename, 
             i.is_external,
-            i.mime as image_mime,
-            a.post_status
+            i.mime as image_mime
           FROM articles a
           LEFT JOIN users u ON a.author_id = u.id
           LEFT JOIN categories c ON a.category_id = c.category_id
           LEFT JOIN images i ON a.featured_image_id = i.id
           LEFT JOIN slugs s ON (s.related_id = a.article_id AND s.type = 'article')
           WHERE a.article_id = $article_id 
-          AND a.article_status IN ('published', 'Premium')
+          AND a.article_status = 'published'
           LIMIT 1";
+
+error_log("Article query: " . $query);
 
 $result = mysqli_query($koneksi, $query);
 
-if (!$result || mysqli_num_rows($result) == 0) {
+if (!$result) {
+    error_log("Query error: " . mysqli_error($koneksi));
+    http_response_code(404);
+    render404Page();
+}
+
+if (mysqli_num_rows($result) == 0) {
+    error_log("Article not found in database");
     http_response_code(404);
     render404Page();
 }
 
 $article = mysqli_fetch_assoc($result);
+
+error_log("Article found: ID=" . $article['article_id'] . ", post_status=" . $article['post_status']);
 
 // Simpan article_id saat ini
 $current_article_id = (int)$article['article_id'];
@@ -293,7 +315,18 @@ function getCorrectImageUrl($image_url, $is_external = 0, $filename = '') {
     }
     
     if (!empty($filename)) {
-        return '/uploads/articles/' . $filename;
+        $possible_paths = [
+            'uploads/articles/published/' . $filename,
+            'uploads/articles/' . $filename,
+        ];
+        
+        foreach ($possible_paths as $path) {
+            if (file_exists($path)) {
+                return $path;
+            }
+        }
+        
+        return 'uploads/articles/' . $filename;
     }
     
     return $image_url;
@@ -308,19 +341,32 @@ $full_name = '';
 function fixUserSession() {
     global $koneksi, $is_logged_in, $user_id, $username, $user_role, $full_name;
     
+    error_log("=== fixUserSession START ===");
+    
     if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+        error_log("User not logged in");
         return false;
     }
     
     $is_logged_in = true;
+    
+    // Prioritas user_id
     $user_id = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 
               (isset($_SESSION['id']) ? (int)$_SESSION['id'] : 0);
+    
     $username = isset($_SESSION['username']) ? $_SESSION['username'] : '';
     $user_role = isset($_SESSION['user_role']) ? $_SESSION['user_role'] : '';
     $full_name = isset($_SESSION['full_name']) ? $_SESSION['full_name'] : '';
     
+    error_log("Session user_id: " . $user_id);
+    error_log("Session username: " . $username);
+    error_log("Session user_role: " . $user_role);
+    
+    // Jika user_id tidak ada tapi username ada, cari di database
     if ($user_id <= 0 && !empty($username)) {
-        $user_query = "SELECT id, username, full_name, role FROM users WHERE username = '" . sanitize_input($username) . "'";
+        error_log("Attempting to fix session from database");
+        
+        $user_query = "SELECT id, username, full_name, role FROM users WHERE username = '" . mysqli_real_escape_string($koneksi, $username) . "' LIMIT 1";
         $user_result = mysqli_query($koneksi, $user_query);
         
         if ($user_result && mysqli_num_rows($user_result) > 0) {
@@ -334,48 +380,78 @@ function fixUserSession() {
             $_SESSION['user_role'] = $user_role;
             $_SESSION['full_name'] = $full_name;
             
-            error_log("Fixed session data for user: " . $username);
+            error_log("Session fixed from database - user_id: " . $user_id . ", role: " . $user_role);
         } else {
+            error_log("User not found in database, destroying session");
             session_destroy();
             return false;
         }
     }
+    
+    error_log("Final user_id: " . $user_id . ", role: " . $user_role);
+    error_log("=== fixUserSession END ===");
     
     return $user_id > 0;
 }
 
 $session_fixed = fixUserSession();
 
-// Query komentar
-$comments_query = "SELECT c.content, c.created_at, u.full_name, u.username
-                   FROM comments c
-                   JOIN users u ON c.user_id = u.id
-                   WHERE c.article_id = $current_article_id
-                   ORDER BY c.created_at DESC";
-$comments_result = mysqli_query($koneksi, $comments_query);
+// ===== PREMIUM ACCESS CONTROL - CRITICAL SECTION =====
+$is_premium_content = false;
+$can_access_premium = false;
 
-// Query artikel terkait - EXCLUDE artikel yang sedang dibuka
+// Cek apakah artikel ini premium (case-insensitive comparison)
+if (isset($article['post_status'])) {
+    $post_status_lower = strtolower(trim($article['post_status']));
+    $is_premium_content = ($post_status_lower === 'premium');
+    
+    error_log("=== PREMIUM CHECK ===");
+    error_log("post_status raw: " . $article['post_status']);
+    error_log("post_status lower: " . $post_status_lower);
+    error_log("is_premium_content: " . ($is_premium_content ? 'YES' : 'NO'));
+}
+
+// Cek apakah user bisa akses premium
+if ($is_logged_in && !empty($user_role)) {
+    // Role yang bisa akses premium: admin dan premium
+    $allowed_roles = ['admin', 'premium'];
+    $can_access_premium = in_array(strtolower($user_role), $allowed_roles);
+    
+    error_log("User role: " . $user_role);
+    error_log("Can access premium: " . ($can_access_premium ? 'YES' : 'NO'));
+    error_log("Allowed roles: " . implode(', ', $allowed_roles));
+} else {
+    error_log("User not logged in or role not set");
+}
+
+error_log("=== ACCESS DECISION ===");
+error_log("is_premium_content: " . ($is_premium_content ? 'YES' : 'NO'));
+error_log("can_access_premium: " . ($can_access_premium ? 'YES' : 'NO'));
+error_log("Will show lock: " . ($is_premium_content && !$can_access_premium ? 'YES' : 'NO'));
+
+// Query artikel terkait
 $related_query = "SELECT 
                     a.article_id, 
                     a.title, 
                     a.publication_date,
-                    s.slug,
-                    a.post_status
+                    a.post_status,
+                    s.slug
                   FROM articles a
                   LEFT JOIN slugs s ON (s.related_id = a.article_id AND s.type = 'article')
                   WHERE a.category_id = {$article['category_id']} 
                   AND a.article_id != $current_article_id
-                  AND a.article_status IN ('published', 'Premium')
+                  AND a.article_status = 'published'
                   ORDER BY a.publication_date DESC 
                   LIMIT 5";
 $related_result = mysqli_query($koneksi, $related_query);
 
-// PERBAIKAN: Query berita populer TANPA EXCLUDE (tetap tampilkan artikel yang sedang dibuka)
+// Query berita populer
 $popular_query = "SELECT 
                     a.article_id, 
                     a.title, 
                     a.publication_date, 
-                    a.view_count, 
+                    a.view_count,
+                    a.post_status,
                     s.slug
                   FROM articles a
                   LEFT JOIN slugs s ON (s.related_id = a.article_id AND s.type = 'article')
@@ -397,7 +473,7 @@ require 'header.php';
     <meta name="description" content="<?php echo htmlspecialchars(substr(strip_tags($article['content']), 0, 160)); ?>">
     
     <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-bs4.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="style/artikel.css">
+  
 </head>
 
 <body>
@@ -423,6 +499,12 @@ require 'header.php';
 
                 <div class="main-article">
                     <div class="article-header">
+                        <?php if ($is_premium_content): ?>
+                        <span class="premium-badge-large">
+                            <i class="fas fa-crown"></i> PREMIUM CONTENT
+                        </span>
+                        <?php endif; ?>
+                        
                         <h1><?php echo htmlspecialchars($article['title']); ?></h1>
                         <div class="article-meta">
                             <span class="badge bg-primary me-2">
@@ -459,14 +541,73 @@ require 'header.php';
                     </div>
                     <?php endif; ?>
 
-                    <?php if (isset($article['post_status']) && strtolower($article['post_status']) === 'premium') : ?>
-                    <div class="premium-lock">
-                        <span class="badge bg-danger">
-                            <i class="fas fa-star"></i> Premium
-                        </span>
-                        <p class="text-muted">Konten ini hanya untuk pengguna Premium.</p>
+                    <?php if ($is_premium_content && !$can_access_premium): ?>
+                    <!-- ===== PREMIUM LOCKED CONTENT ===== -->
+                    <div class="content-preview">
+                        <div class="article-content">
+                            <?php echo substr(strip_tags($article['content']), 0, 600); ?>...
+                        </div>
                     </div>
-                    <?php else : ?>
+                    
+                    <div class="premium-lock-overlay">
+                        <div class="lock-icon">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <h3>🔒 Konten Premium Terkunci</h3>
+                        <p>Artikel ini adalah konten eksklusif untuk member <strong>Premium</strong>.<br>
+                        Upgrade akun Anda untuk membaca artikel lengkap dan nikmati berbagai keuntungan lainnya!</p>
+                        
+                        <div class="premium-benefits">
+                            <h4><i class="fas fa-star"></i> Keuntungan Member Premium:</h4>
+                            <ul>
+                                <li><strong>Akses Unlimited</strong> - Baca semua artikel premium tanpa batas</li>
+                                <li><strong>Konten Eksklusif</strong> - Artikel eksklusif dari penulis ternama</li>
+                                <li><strong>Early Access</strong> - Akses dini ke artikel terbaru sebelum publik</li>
+                                <li><strong>UI halaman utama</strong> - Mendapatkan UI halaman utama premium</li>
+                                <li><strong>No Ads</strong> - Pengalaman membaca tanpa iklan</li>
+                            </ul>
+                        </div>
+                        
+                        <?php if ($is_logged_in): ?>
+                        <p style="font-size: 16px; color: #666; margin-bottom: 20px;">
+                            <i class="fas fa-user-circle"></i> Login sebagai: <strong><?php echo htmlspecialchars($username); ?></strong> 
+                            (Role: <span style="color: #FF8C00;"><?php echo htmlspecialchars($user_role); ?></span>)
+                        </p>
+                        <a href="https://saweria.co/SorotDunia" class="upgrade-btn">
+                            <i class="fas fa-crown"></i> Upgrade ke Premium
+                        </a>
+                        <div class="login-prompt">
+                            <p class="mb-0">
+                                <i class="fa-solid fa-money-bill"></i>
+                                UNTUK UPGRADE TEKAN TOMBOL UPGRADE KE PREMIUM MAKA AKAN MASUK KE HALAMAN SAWERIA
+                            </p>
+                            <strong>
+                                <i class="fa-solid fa-circle-exclamation"></i>
+                                DAN INGGAT TULIS USERNAME ATAU EMAIL AKUN YANG TELAH ANDA BUAT DI SOROT DUNIA
+                            </strong>
+                        </div>
+                        <?php else: ?>
+                        <a href="#" class="upgrade-btn" data-bs-toggle="modal" data-bs-target="#loginModal">
+                            <i class="fas fa-sign-in-alt"></i> Login untuk Lanjutkan
+                        </a>
+                        <div class="login-prompt">
+                            <p class="mb-0">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Belum punya akun? <a href="#" data-bs-toggle="modal" data-bs-target="#registerModal">Daftar sekarang</a> dan upgrade ke premium untuk menikmati fitur Eksklusif
+                            </p>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <?php else: ?>
+                    <!-- ===== UNLOCKED CONTENT ===== -->
+                    <?php if ($is_premium_content && $can_access_premium): ?>
+                    <div class="premium-access-badge">
+                        <i class="fas fa-check-circle"></i>
+                        <strong>Selamat!</strong> Anda memiliki akses penuh ke konten premium ini sebagai member <strong><?php echo strtoupper($user_role); ?></strong>
+                    </div>
+                    <?php endif; ?>
+                    
                     <div class="article-content">
                         <?php echo $article['content']; ?>
                     </div>
@@ -480,6 +621,9 @@ require 'header.php';
                     ?>
                 </div>
 
+                <!-- ========================================
+                     COMMENT SECTION - DENGAN PAGINATION
+                     ======================================== -->
                 <div class="comment-section">
                     <div class="comment-header">
                         <h4><i class="fas fa-comments me-2"></i>Komentar</h4>
@@ -511,45 +655,34 @@ require 'header.php';
                     <?php else: ?>
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
-                        Silakan <a href="login.php?redirect=<?php echo urlencode('artikel.php?slug=' . $article['slug']); ?>" class="alert-link">login</a> untuk menulis komentar.
+                        Silakan <a href="#" data-bs-toggle="modal" data-bs-target="#loginModal" class="alert-link">login</a> untuk menulis komentar.
                     </div>
                     <?php endif; ?>
 
+                    <!-- Comments List Container - Will be loaded via AJAX -->
                     <div class="comments-list">
-                        <?php if ($comments_result && mysqli_num_rows($comments_result) > 0): ?>
-                        <h5 class="mb-3">
-                            <i class="fas fa-comments me-2"></i>
-                            Komentar (<?php echo mysqli_num_rows($comments_result); ?>)
-                        </h5>
-                        <?php while ($comment = mysqli_fetch_assoc($comments_result)): ?>
-                        <div class="comment-item">
-                            <div class="comment-author mb-2">
-                                <i class="fas fa-user-circle fa-lg text-primary me-2"></i>
-                                <strong><?php echo htmlspecialchars($comment['full_name'] ?: $comment['username']); ?></strong>
-                                <small class="comment-date text-muted d-block ms-4">
-                                    <i class="fas fa-clock me-1"></i>
-                                    <?php echo date('d M Y H:i', strtotime($comment['created_at'])); ?>
-                                </small>
+                        <!-- Initial loading indicator -->
+                        <div class="text-center my-4" id="initial-loading">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
                             </div>
-                            <div class="comment-content">
-                                <?php echo nl2br(htmlspecialchars($comment['content'])); ?>
-                            </div>
+                            <p class="text-muted mt-2">Memuat komentar...</p>
                         </div>
-                        <?php endwhile; ?>
-                        <?php else: ?>
-                        <div class="alert alert-light text-center">
-                            <i class="fas fa-comments fa-2x text-muted mb-2"></i>
-                            <p class="text-muted mb-0">Belum ada komentar. Jadilah yang pertama!</p>
-                        </div>
-                        <?php endif; ?>
+                    </div>
+                    
+                    <!-- Pagination Container -->
+                    <div id="comment-pagination" class="comment-pagination" style="display: none;">
+                        <!-- Pagination will be rendered here by JavaScript -->
                     </div>
                 </div>
+                <!-- END COMMENT SECTION -->
             </div>
 
             <div class="col-lg-4">
+                <!-- Artikel Terkait -->
                 <?php if ($related_result && mysqli_num_rows($related_result) > 0): ?>
                 <div class="sidebar">
-                    <div class="sidebar-header bg-primary text-white">
+                    <div class="sidebar-header text-white">
                         <i class="fas fa-newspaper me-2"></i>Artikel Terkait
                     </div>
                     <div class="sidebar-content">
@@ -558,8 +691,15 @@ require 'header.php';
                         $related_url = !empty($related['slug']) 
                             ? 'artikel.php?slug=' . urlencode($related['slug'])
                             : 'artikel.php?id=' . $related['article_id'];
+                        
+                        $related_is_premium = (isset($related['post_status']) && strtolower($related['post_status']) === 'premium');
                         ?>
                         <div class="related-item mb-3 pb-3 border-bottom">
+                            <?php if ($related_is_premium): ?>
+                            <span class="premium-badge-small">
+                                <i class="fas fa-crown"></i> PREMIUM
+                            </span>
+                            <?php endif; ?>
                             <h6 class="mb-2">
                                 <a href="<?php echo $related_url; ?>" 
                                    class="text-decoration-none text-dark">
@@ -576,10 +716,10 @@ require 'header.php';
                 </div>
                 <?php endif; ?>
 
-                <!-- Berita Terpopuler - TETAP TAMPILKAN ARTIKEL YANG SEDANG DIBUKA -->
+                <!-- Berita Terpopuler -->
                 <?php if ($popular_result && mysqli_num_rows($popular_result) > 0): ?>
                 <div class="sidebar mt-3">
-                    <div class="sidebar-header bg-danger text-white">
+                    <div class="sidebar-header text-white">
                         <i class="fas fa-fire me-2"></i>Berita Terpopuler
                     </div>
                     <div class="sidebar-content p-3">
@@ -590,8 +730,8 @@ require 'header.php';
                                 ? 'artikel.php?slug=' . urlencode($popular['slug'])
                                 : 'artikel.php?id=' . $popular['article_id'];
                             
-                            // Tandai jika ini artikel yang sedang dibuka
                             $is_current = ((int)$popular['article_id'] === $current_article_id);
+                            $popular_is_premium = (isset($popular['post_status']) && strtolower($popular['post_status']) === 'premium');
                         ?>
                         <div class="trending-item mb-3 pb-3 <?php echo $counter < 5 ? 'border-bottom' : ''; ?> <?php echo $is_current ? 'bg-light' : ''; ?>">
                             <div class="d-flex align-items-start">
@@ -600,6 +740,12 @@ require 'header.php';
                                     <?php echo $counter; ?>
                                 </div>
                                 <div class="trending-content flex-grow-1">
+                                    <?php if ($popular_is_premium): ?>
+                                    <span class="premium-badge-small">
+                                        <i class="fas fa-crown"></i> PREMIUM
+                                    </span>
+                                    <?php endif; ?>
+                                    
                                     <?php if ($is_current): ?>
                                     <div class="text-dark">
                                         <h6 class="mb-1 fw-bold" style="line-height: 1.4;">
@@ -632,23 +778,34 @@ require 'header.php';
                         ?>
                     </div>
                 </div>
-                <?php else: ?>
-                <div class="sidebar mt-3">
-                    <div class="sidebar-header bg-danger text-white">
-                        <i class="fas fa-fire me-2"></i>Berita Terpopuler
-                    </div>
-                    <div class="sidebar-content p-3">
-                        <div class="text-center text-muted py-3">
-                            <i class="fas fa-newspaper fa-2x mb-2"></i>
-                            <p class="mb-0">Belum ada berita populer</p>
-                        </div>
-                    </div>
-                </div>
                 <?php endif; ?>
             </div>
         </div>
     </div>
 
     <?php require 'footer.php'; ?>
+    
+    <!-- SCRIPT KHUSUS UNTUK HANDLE LOGIN MODAL -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle semua link login untuk membuka modal
+        document.querySelectorAll('a[href="#"][data-bs-toggle="modal"][data-bs-target="#loginModal"]').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+                loginModal.show();
+            });
+        });
+        
+        // Handle semua link register untuk membuka modal
+        document.querySelectorAll('a[href="#"][data-bs-toggle="modal"][data-bs-target="#registerModal"]').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const registerModal = new bootstrap.Modal(document.getElementById('registerModal'));
+                registerModal.show();
+            });
+        });
+    });
+    </script>
 </body>
 </html>

@@ -99,7 +99,7 @@ $visitor_stats = getVisitorStats($koneksi);
     <div class="card bg-secondary text-white">
         <div class="card-body">
             <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
-                <h2 class="mb-2 mb-md-0 h4 h-md-2">Dashboard Admin</h2>
+                <h2 class="mb-2 mb-md-0 h4 h-md-2" style="color: white;">Dashboard Admin</h2>
                 <div class="d-flex flex-column flex-sm-row gap-2 w-100 w-md-auto">
                     <span class="badge bg-success">
                         <i class="bi bi-circle-fill"></i> Online
@@ -112,9 +112,9 @@ $visitor_stats = getVisitorStats($koneksi);
 
 <!-- Welcome Message with Auto-hide -->
 <div class="alert alert-success welcome-alert" role="alert" id="welcomeAlert">
-    <i class="bi bi-check-circle"></i>
-    <strong>Selamat datang, <?php echo $_SESSION['username'] ?? 'Admin'; ?>!</strong>
-    <span class="d-none d-sm-inline">Anda berhasil login sebagai administrator.</span>
+    <i class="bi bi-check-circle"style="color: white;"></i>
+    <strong style="color: white;">Selamat datang, <?php echo $_SESSION['username'] ?? 'Admin'; ?>!</strong>
+    <span class="d-none d-sm-inline" style="color: white;">Anda berhasil login sebagai administrator.</span>
     <span class="d-sm-none">Login berhasil!</span>
 </div>
 
@@ -226,7 +226,7 @@ $visitor_stats = getVisitorStats($koneksi);
                                 <td>
                                     <div class="d-flex gap-1">
                                         <a href="index.php?page=articles" class="btn btn-sm btn-primary" title="Kelola">
-                                            <i class="bi bi-gear"></i>
+                                            <i class="bi bi-gear"style="color: black;"></i>
                                         </a>
                                         <a href="../artikel.php?id=<?php echo $article['article_id'] ?? ''; ?>"
                                             class="btn btn-sm btn-success" title="Lihat" target="_blank">

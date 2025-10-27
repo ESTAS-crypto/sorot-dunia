@@ -1,5 +1,5 @@
 <?php
-// admin/index.php - Main Controller
+// admin/index.php - Main Controller with Clean URL Support
 session_start();
 
 // Enable error reporting for debugging
@@ -10,9 +10,9 @@ error_reporting(E_ALL);
 // Include config
 include '../config/config.php';
 
-// ========== CEK LOGIN - REDIRECT KE admin-login.php ==========
+// ========== CEK LOGIN - REDIRECT KE admin-login ==========
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    header("Location: admin-login.php");
+    header("Location: admin-login");
     exit();
 }
 
@@ -35,7 +35,7 @@ if (!isset($_SESSION['user_role']) || strtolower($_SESSION['user_role']) !== 'ad
     
     // Logout dan redirect ke login
     session_destroy();
-    header("Location: admin-login.php?error=not_admin");
+    header("Location: admin-login?error=not_admin");
     exit();
 }
 
@@ -43,7 +43,7 @@ if (!isset($_SESSION['user_role']) || strtolower($_SESSION['user_role']) !== 'ad
 $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 
 // Define allowed pages
-$allowed_pages = ['dashboard', 'articles', 'users', 'categories', 'comments', 'settings', 'analytics','token'];
+$allowed_pages = ['dashboard', 'articles', 'users', 'categories', 'comments', 'settings', 'analytics', 'token'];
 
 // Validate page
 if (!in_array($page, $allowed_pages)) {
@@ -51,10 +51,10 @@ if (!in_array($page, $allowed_pages)) {
 }
 
 // Include the header
-include 'include/header.php';
+include 'include/header_admin.php';
 
 // Include the sidebar
-include 'include/sidebar.php';
+include 'include/sidebar_admin.php';
 
 // Main content wrapper
 echo '<div class="main-content" id="mainContent">';
@@ -95,5 +95,5 @@ echo '</div>';
 echo '</div>';
 
 // Include the footer
-include 'include/footer.php';
+include 'include/footer_admin.php';
 ?>

@@ -97,6 +97,21 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
 <link href="https://cdnjs.cloudflare.com/ajax/libs/summernote/0.8.20/summernote-bs5.min.css" rel="stylesheet">
 
 <style>
+:root {
+    --primary-color: #000000;
+    --secondary-color: #333333;
+    --accent-color: #666666;
+    --light-gray: #f8f9fa;
+    --medium-gray: #e9ecef;
+    --border-color: #dee2e6;
+    --white: #ffffff;
+    --success-color: #28a745;
+    --error-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+    --hover-color: #f1f3f4;
+}
+
 /* Upload page specific styles */
 .upload-form-container {
     background: var(--white);
@@ -125,6 +140,51 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     color: var(--accent-color);
     font-size: 1.1rem;
     margin: 0;
+}
+
+/* NEW: Requirements Alert */
+.requirements-alert {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.requirements-alert h5 {
+    font-weight: 700;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.requirements-alert h5 i {
+    font-size: 1.5rem;
+}
+
+.requirements-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.requirements-list li {
+    padding: 0.5rem 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.requirements-list li i {
+    color: #ffd700;
+    margin-top: 0.25rem;
+    font-size: 1rem;
+}
+
+.requirements-list li strong {
+    color: #ffd700;
 }
 
 .form-floating {
@@ -160,7 +220,7 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     font-weight: 500;
 }
 
-/* ===== DRAG AND DROP STYLES - HANYA DI AREA GAMBAR ===== */
+/* File upload area */
 .file-upload-area {
     border: 3px dashed var(--border-color);
     border-radius: 15px;
@@ -178,7 +238,6 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     justify-content: center;
 }
 
-/* CRITICAL: Prevent pointer events on children */
 .file-upload-area * {
     pointer-events: none;
 }
@@ -216,6 +275,13 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
 
 .file-upload-area.dragover > div {
     opacity: 0.3;
+}
+
+/* Required marker */
+.required-marker {
+    color: var(--error-color);
+    font-weight: bold;
+    margin-left: 0.25rem;
 }
 
 .upload-progress {
@@ -324,15 +390,11 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     cursor: pointer;
 }
 
-/* Summernote Bootstrap 5 Styles */
+/* Summernote styles */
 .note-editor {
     border: 2px solid var(--border-color) !important;
     border-radius: 12px !important;
     margin-bottom: 1.5rem;
-}
-
-.note-editor.note-frame {
-    border-color: var(--border-color) !important;
 }
 
 .note-toolbar {
@@ -340,10 +402,6 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     border-bottom: 2px solid var(--border-color) !important;
     border-radius: 12px 12px 0 0 !important;
     padding: 10px !important;
-}
-
-.note-btn-group {
-    margin-right: 5px;
 }
 
 .note-btn {
@@ -360,38 +418,12 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
     border-color: var(--primary-color) !important;
 }
 
-.note-btn.active,
-.note-btn:active {
-    background: var(--primary-color) !important;
-    color: white !important;
-}
-
 .note-editable {
     min-height: 400px !important;
     padding: 20px !important;
     font-size: 16px !important;
     line-height: 1.6 !important;
     background: white !important;
-}
-
-.note-editable:focus {
-    outline: none !important;
-    background: white !important;
-}
-
-.note-statusbar {
-    background: #f8f9fa !important;
-    border-top: 1px solid var(--border-color) !important;
-}
-
-.note-editor .dropdown-menu {
-    z-index: 9999 !important;
-    display: none;
-    position: absolute;
-}
-
-.note-editor .dropdown-menu.show {
-    display: block !important;
 }
 
 /* Action buttons */
@@ -424,25 +456,12 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
         min-height: 150px;
     }
     
-    .file-upload-area.dragover::before {
-        font-size: 1.2rem;
-        padding: 0.75rem 1.5rem;
+    .requirements-alert {
+        padding: 1rem;
     }
     
-    .note-toolbar {
-        overflow-x: auto;
-        white-space: nowrap;
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    .note-btn-group {
-        display: inline-block;
-        vertical-align: top;
-    }
-    
-    .note-editable {
-        min-height: 300px !important;
-        font-size: 16px !important;
+    .requirements-list li {
+        font-size: 0.9rem;
     }
 }
 </style>
@@ -464,6 +483,46 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
             </p>
         </div>
 
+        <!-- NEW: Requirements Alert -->
+        <div class="requirements-alert">
+            <h5>
+                <i class="fas fa-info-circle"></i>
+                Syarat Publish Artikel
+            </h5>
+            <ul class="requirements-list">
+                <li>
+                    <i class="fas fa-check-circle"></i>
+                    <span><strong>Gambar Berita:</strong> WAJIB upload gambar (JPG/PNG/WEBP, max 5MB)</span>
+                </li>
+                <li>
+                    <i class="fas fa-check-circle"></i>
+                    <span><strong>Judul:</strong> Maksimal 200 karakter</span>
+                </li>
+                <li>
+                    <i class="fas fa-check-circle"></i>
+                    <span><strong>Ringkasan:</strong> Maksimal 300 karakter</span>
+                </li>
+                <li>
+                    <i class="fas fa-check-circle"></i>
+                    <span><strong>Konten:</strong> Minimal 100 karakter</span>
+                </li>
+                <li>
+                    <i class="fas fa-check-circle"></i>
+                    <span><strong>Tag:</strong> Minimal 1 tag harus diisi</span>
+                </li>
+                <li>
+                    <i class="fas fa-check-circle"></i>
+                    <span><strong>Kategori:</strong> Pilih kategori yang sesuai</span>
+                </li>
+            </ul>
+            <div class="mt-3" style="border-top: 1px solid rgba(255,255,255,0.3); padding-top: 1rem;">
+                <small>
+                    <i class="fas fa-lightbulb"></i>
+                    <strong>Tips:</strong> Untuk menyimpan sebagai draft, syarat gambar & tag tidak wajib.
+                </small>
+            </div>
+        </div>
+
         <div id="alertContainer"></div>
 
         <form id="uploadForm" enctype="multipart/form-data">
@@ -482,7 +541,7 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
                         <input type="text" class="form-control" id="title" name="title"
                             placeholder="Judul Berita" required maxlength="200"
                             value="<?php echo $editing ? htmlspecialchars($article_data['title']) : ''; ?>">
-                        <label for="title">Judul Berita *</label>
+                        <label for="title">Judul Berita <span class="required-marker">*</span></label>
                         <div class="char-counter" id="titleCounter">0/200</div>
                     </div>
 
@@ -500,14 +559,15 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
                         <textarea class="form-control" id="summary" name="summary"
                             placeholder="Ringkasan berita" style="height: 120px" required
                             maxlength="300"><?php echo $editing ? htmlspecialchars($article_data['meta_description']) : ''; ?></textarea>
-                        <label for="summary">Ringkasan Berita *</label>
+                        <label for="summary">Ringkasan Berita <span class="required-marker">*</span></label>
                         <div class="char-counter" id="summaryCounter">0/300</div>
                     </div>
 
                     <!-- Konten dengan Summernote -->
                     <div class="mb-3">
                         <label class="form-label fw-bold">
-                            <i class="fas fa-edit me-2"></i>Konten Berita *
+                            <i class="fas fa-edit me-2"></i>Konten Berita <span class="required-marker">*</span>
+                            <small class="text-muted">(Min. 100 karakter untuk publish)</small>
                         </label>
                         <textarea class="form-control" id="content" name="content" required><?php echo $editing ? $article_data['content'] : ''; ?></textarea>
                         <div class="char-counter" id="contentCounter" style="position: relative; text-align: right; margin-top: 5px;">0 karakter</div>
@@ -526,12 +586,16 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
                             </option>
                             <?php endforeach; ?>
                         </select>
-                        <label for="category">Kategori *</label>
+                        <label for="category">Kategori <span class="required-marker">*</span></label>
                     </div>
 
                     <!-- Tag -->
                     <div class="mb-3">
-                        <label class="form-label">Tambah Tag</label>
+                        <label class="form-label">
+                            Tambah Tag 
+                            <span class="required-marker">*</span>
+                            <small class="text-muted">(Min. 1 tag untuk publish)</small>
+                        </label>
                         <input type="text" class="form-control" id="tagInput" 
                             placeholder="Ketik tag dan tekan Enter atau koma">
                         <div class="tag-display" id="tagDisplay">
@@ -555,13 +619,14 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
                 </div>
             </div>
 
-            <!-- Upload Gambar - FIXED: HANYA AREA INI YANG DRAG DROP -->
+            <!-- Upload Gambar -->
             <div class="mb-4">
                 <label class="form-label fw-bold">
                     <i class="fas fa-image me-2"></i>Gambar Berita
+                    <span class="required-marker">*</span>
+                    <small class="text-muted">(WAJIB untuk publish artikel)</small>
                 </label>
                 
-                <!-- PERBAIKAN: Drag drop HANYA di area ini -->
                 <div class="file-upload-area" id="dropZone">
                     <input type="file" id="image" name="image" style="display: none;"
                         accept="image/jpeg,image/jpg,image/png,image/webp,image/gif">
@@ -571,6 +636,10 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
                         <h5>Klik atau Drag & Drop Gambar</h5>
                         <p class="text-muted">Format: JPG, PNG, GIF, WebP | Maksimal: 5MB<br>
                         Auto-convert ke WebP, resize max 1000px, compress max 300KB</p>
+                        <div class="alert alert-warning mt-3" style="display: inline-block;">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Wajib upload gambar untuk publish artikel!</strong>
+                        </div>
                     </div>
                 </div>
 
@@ -613,6 +682,7 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
                 
                 <button type="button" class="btn btn-draft" id="saveDraftBtn" onclick="saveDraft()">
                     <i class="fas fa-save me-2"></i>Simpan Draft
+                    <small class="d-block" style="font-size: 0.75rem;">(Tanpa syarat wajib)</small>
                 </button>
                 
                 <button type="submit" class="btn btn-primary" id="submitBtn">
@@ -624,6 +694,7 @@ if (isset($_GET['slug']) && !empty($_GET['slug'])) {
                         echo ($current_user['role'] === 'admin') ? 'Publish Berita' : 'Submit Berita';
                     }
                     ?>
+                    <small class="d-block" style="font-size: 0.75rem;">(Cek syarat wajib)</small>
                 </button>
             </div>
         </form>
@@ -683,7 +754,7 @@ document.addEventListener('DOMContentLoaded', function() {
             height: 400,
             minHeight: 300,
             maxHeight: 600,
-            placeholder: 'Tulis konten berita lengkap di sini...',
+            placeholder: 'Tulis konten berita lengkap di sini... (Minimal 100 karakter untuk publish)',
             focus: false,
             toolbar: [
                 ['style', ['style']],
@@ -832,12 +903,15 @@ document.addEventListener('DOMContentLoaded', function() {
         
         contentCounter.textContent = length + ' karakter';
         
-        if (length > 5000) {
+        if (length < 100) {
+            contentCounter.style.color = '#dc3545';
+            contentCounter.textContent = length + ' karakter (Min. 100 untuk publish)';
+        } else if (length > 5000) {
             contentCounter.style.color = '#dc3545';
         } else if (length > 3000) {
             contentCounter.style.color = '#ffc107';
         } else {
-            contentCounter.style.color = '#666';
+            contentCounter.style.color = '#28a745';
         }
     }
 
@@ -928,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    // ===== DRAG AND DROP - HANYA DI AREA GAMBAR BERITA =====
+    // Drag and Drop
     function initDragDrop() {
         const dropZone = getEl('dropZone');
         const fileInput = getEl('image');
@@ -938,9 +1012,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        console.log('✓ Initializing drag and drop (IMAGE AREA ONLY)...');
-
-        // Handle file input change
         fileInput.addEventListener('change', function(e) {
             if (e.target.files.length > 0) {
                 handleFile(e.target.files[0]);
@@ -948,10 +1019,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         let dragCounter = 0;
-        let isDragging = false;
 
-        // PENTING: Event handlers HANYA di dropZone, bukan di window/document
-        // Ini membuat Summernote tetap bisa drag/drop gambar sendiri
         const events = ['dragenter', 'dragover', 'dragleave', 'drop'];
         
         events.forEach(eventName => {
@@ -961,17 +1029,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }, false);
         });
 
-        // Drag enter
         dropZone.addEventListener('dragenter', function(e) {
             e.preventDefault();
             e.stopPropagation();
             dragCounter++;
-            isDragging = true;
             dropZone.classList.add('dragover');
-            console.log('Drag enter dropZone, counter:', dragCounter);
         }, false);
 
-        // Drag over - CRITICAL untuk enable drop
         dropZone.addEventListener('dragover', function(e) {
             e.preventDefault();
             e.stopPropagation();
@@ -979,91 +1043,53 @@ document.addEventListener('DOMContentLoaded', function() {
             dropZone.classList.add('dragover');
         }, false);
 
-        // Drag leave
         dropZone.addEventListener('dragleave', function(e) {
             e.preventDefault();
             e.stopPropagation();
             dragCounter--;
             
             if (dragCounter === 0) {
-                isDragging = false;
                 dropZone.classList.remove('dragover');
-                console.log('Drag leave dropZone, counter:', dragCounter);
             }
         }, false);
 
-        // Drop handler
         dropZone.addEventListener('drop', function(e) {
             e.preventDefault();
             e.stopPropagation();
             
             dragCounter = 0;
-            isDragging = false;
             dropZone.classList.remove('dragover');
-            
-            console.log('✓ Drop event in IMAGE AREA');
             
             const dt = e.dataTransfer;
             
             if (!dt) {
-                console.error('No dataTransfer object');
                 showAlert('error', 'Gagal mengambil file');
                 return;
             }
             
             const files = dt.files;
-            console.log('Files dropped:', files.length);
             
             if (files && files.length > 0) {
-                console.log('File details:', {
-                    name: files[0].name,
-                    size: files[0].size,
-                    type: files[0].type
-                });
                 handleFile(files[0]);
-            } else {
-                console.warn('No files in drop');
-                showAlert('warning', 'Tidak ada file yang di-drop');
             }
         }, false);
 
-        // Click handler
         dropZone.addEventListener('click', function(e) {
-            if (!isDragging) {
-                e.preventDefault();
-                fileInput.click();
-            }
+            e.preventDefault();
+            fileInput.click();
         }, false);
 
-        // File validation dan upload
         function handleFile(file) {
-            console.log('=== HANDLE FILE START ===');
-            console.log('File:', file.name);
-            console.log('Type:', file.type);
-            console.log('Size:', file.size);
-
             if (!file.type.startsWith('image/')) {
                 showAlert('error', 'File harus berupa gambar');
-                console.error('Invalid file type:', file.type);
                 return;
             }
 
             if (file.size > 5 * 1024 * 1024) {
                 showAlert('error', 'Ukuran file maksimal 5MB');
-                console.error('File too large:', file.size);
                 return;
             }
 
-            const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-            const fileExtension = file.name.split('.').pop().toLowerCase();
-            
-            if (!validExtensions.includes(fileExtension)) {
-                showAlert('error', 'Format file tidak didukung. Gunakan JPG, PNG, GIF, atau WebP');
-                console.error('Invalid extension:', fileExtension);
-                return;
-            }
-
-            console.log('File validation passed, uploading...');
             uploadFile(file);
         }
 
@@ -1128,7 +1154,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const uploadStatus = getEl('uploadStatus');
             uploadStatus.className = 'upload-status success';
-            uploadStatus.textContent = 'Gambar berhasil diupload!';
+            uploadStatus.textContent = '✓ Gambar berhasil diupload!';
             uploadStatus.style.display = 'block';
 
             getEl('uploadedThumbnail').src = data.url;
@@ -1146,7 +1172,7 @@ document.addEventListener('DOMContentLoaded', function() {
         function handleUploadError(message) {
             const uploadStatus = getEl('uploadStatus');
             uploadStatus.className = 'upload-status error';
-            uploadStatus.textContent = 'Upload gagal: ' + message;
+            uploadStatus.textContent = '✗ Upload gagal: ' + message;
             uploadStatus.style.display = 'block';
             
             showAlert('error', message);
@@ -1161,8 +1187,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 showAlert('info', 'Gambar telah dihapus');
             }
         };
-
-        console.log('✓ Drag and drop initialized (IMAGE AREA ONLY)');
     }
 
     function initFormSubmission() {
@@ -1180,7 +1204,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function submitArticle(action) {
         if (isSubmitting) return;
-        if (!validateForm()) return;
+        if (!validateForm(action)) return;
         
         isSubmitting = true;
         
@@ -1254,8 +1278,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function validateForm() {
+    function validateForm(action) {
         let isValid = true;
+        let errors = [];
         
         const requiredFields = ['title', 'summary', 'category'];
         requiredFields.forEach(fieldId => {
@@ -1264,6 +1289,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (!value || value.length === 0) {
                 field.classList.add('is-invalid');
+                errors.push(`${field.labels[0]?.textContent || fieldId} wajib diisi`);
                 isValid = false;
             } else {
                 field.classList.remove('is-invalid');
@@ -1276,13 +1302,54 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!textContent || textContent.length === 0) {
             $('#content').next('.note-editor').addClass('is-invalid');
+            errors.push('Konten berita wajib diisi');
             isValid = false;
         } else {
             $('#content').next('.note-editor').removeClass('is-invalid').addClass('is-valid');
         }
 
+        // PUBLISH VALIDATION
+        if (action === 'publish') {
+            // Check image
+            if (!uploadedImageId || uploadedImageId <= 0) {
+                errors.push('⚠️ GAMBAR BERITA WAJIB DIUPLOAD untuk publish artikel!');
+                isValid = false;
+                
+                // Highlight upload area
+                const dropZone = getEl('dropZone');
+                dropZone.style.borderColor = '#dc3545';
+                dropZone.style.background = '#f8d7da';
+                setTimeout(() => {
+                    dropZone.style.borderColor = '';
+                    dropZone.style.background = '';
+                }, 3000);
+            }
+            
+            // Check tags
+            if (tags.length === 0) {
+                errors.push('⚠️ TAG ARTIKEL WAJIB DIISI minimal 1 tag untuk publish!');
+                isValid = false;
+                
+                const tagInput = getEl('tagInput');
+                tagInput.classList.add('is-invalid');
+                setTimeout(() => {
+                    tagInput.classList.remove('is-invalid');
+                }, 3000);
+            }
+            
+            // Check content length
+            if (textContent.length < 100) {
+                errors.push(`⚠️ KONTEN ARTIKEL TERLALU PENDEK! Minimal 100 karakter untuk publish (saat ini: ${textContent.length} karakter)`);
+                isValid = false;
+            }
+        }
+
         if (!isValid) {
-            showAlert('error', 'Mohon lengkapi semua field yang wajib diisi');
+            const errorMessage = errors.join('<br>');
+            showAlert('error', errorMessage);
+            
+            // Scroll to top to see error
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         return isValid;
@@ -1310,7 +1377,7 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(() => {
             const alert = alertContainer.querySelector('.alert');
             if (alert) alert.remove();
-        }, 5000);
+        }, 8000);
     }
 
     window.resetForm = function() {
@@ -1330,10 +1397,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    console.log('✓ Upload page initialized');
-    console.log('✓ Drag & Drop: IMAGE AREA ONLY');
-    console.log('✓ Summernote: Can use its own drag & drop');
+    console.log('✓ Upload page initialized with mandatory validations');
 });
 </script>
-?bypass=evan123
+
 <?php require_once 'footer.php'; ?>

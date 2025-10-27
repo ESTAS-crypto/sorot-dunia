@@ -1,72 +1,28 @@
 <?php
-// berita.php - FIXED VERSION dengan Hero Carousel yang diperbaiki
 ob_start();
+require_once 'header.php';
 
-// Include konfigurasi database
-require_once 'config/config.php';
-
-// Mulai session jika belum
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// PERBAIKAN: Cek koneksi database
 if (!isset($koneksi) || !$koneksi) {
-    die('<div class="container mt-5">
-        <div class="alert alert-danger">
-            <h4>Koneksi Database Gagal</h4>
-            <p>Tidak dapat terhubung ke database. Silakan periksa konfigurasi.</p>
-        </div>
-    </div>');
+    die('<div class="alert alert-danger">Koneksi database gagal. Silakan periksa konfigurasi.</div>');
 }
 
-// Cek apakah ini request untuk detail artikel
-$article_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$articlesPerPage = getSetting('articles_per_page', 10);
+$page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+$offset = ($page - 1) * $articlesPerPage;
 
-// Mode detail artikel - redirect ke artikel.php
-if ($article_id > 0) {
-    ob_clean();
-    header("Location: artikel.php?id=" . $article_id);
+if (isset($_GET['q']) && !empty($_GET['q'])) {
+    header("Location: search.php?q=" . urlencode($_GET['q']));
     exit();
 }
 
-// Include header
-require_once 'header.php';
-
-// PERBAIKAN: Query database dengan error handling yang lebih baik
-$news_result = false;
-$popular_result = false;
-$categories_result = false;
+$free_articles = [];
+$premium_articles = [];
 $total_articles = 0;
-$error_occurred = false;
+$popular_articles = [];
+$categories_data = [];
 
 try {
-    // Query berita terbaru dengan JOIN yang benar
-    $query = "SELECT 
-                a.article_id, 
-                a.title, 
-                a.publication_date,
-                a.view_count,
-                i.filename as image_filename,
-                i.url as image_url,
-                i.is_external,
-                c.name as category_name,
-                u.full_name as author_name
-              FROM articles a
-              LEFT JOIN images i ON a.featured_image_id = i.id
-              LEFT JOIN categories c ON a.category_id = c.category_id  
-              LEFT JOIN users u ON a.author_id = u.id
-              WHERE a.article_status = 'published'
-              ORDER BY a.publication_date DESC 
-              LIMIT 20";
-
-    $news_result = mysqli_query($koneksi, $query);
-    
-    if (!$news_result) {
-        throw new Exception("Query berita gagal: " . mysqli_error($koneksi));
-    }
-
-    // Hitung total artikel
+    // Count total published articles
     $count_query = "SELECT COUNT(*) as total FROM articles WHERE article_status = 'published'";
     $count_result = mysqli_query($koneksi, $count_query);
     
@@ -77,26 +33,147 @@ try {
     $count_row = mysqli_fetch_assoc($count_result);
     $total_articles = $count_row ? intval($count_row['total']) : 0;
 
-    // Query berita populer
+    // Get FREE articles
+    $free_query = "SELECT 
+                    a.article_id, 
+                    a.title, 
+                    a.content, 
+                    a.publication_date,
+                    a.view_count,
+                    a.post_status,
+                    u.full_name as author_name,
+                    u.username as author_username,
+                    c.name as category_name,
+                    i.filename as image_filename,
+                    i.url as image_url,
+                    i.is_external
+                  FROM articles a
+                  LEFT JOIN users u ON a.author_id = u.id
+                  LEFT JOIN categories c ON a.category_id = c.category_id
+                  LEFT JOIN images i ON a.featured_image_id = i.id
+                  WHERE a.article_status = 'published' AND a.post_status = 'Free'
+                  ORDER BY a.publication_date DESC 
+                  LIMIT 15";
+
+    $free_result = mysqli_query($koneksi, $free_query);
+    
+    if (!$free_result) {
+        throw new Exception("Query free articles gagal: " . mysqli_error($koneksi));
+    }
+    
+    while ($row = mysqli_fetch_assoc($free_result)) {
+        if (!empty($row['image_filename'])) {
+            if ($row['is_external'] && !empty($row['image_url'])) {
+                $row['display_image'] = $row['image_url'];
+            } else {
+                $possible_paths = [
+                    'uploads/articles/published/' . $row['image_filename'],
+                    'uploads/articles/' . $row['image_filename'],
+                    $row['image_filename']
+                ];
+                
+                $row['display_image'] = null;
+                foreach ($possible_paths as $path) {
+                    if (file_exists($path)) {
+                        $row['display_image'] = $path;
+                        break;
+                    }
+                }
+                
+                if (!$row['display_image'] && !empty($row['image_url'])) {
+                    $row['display_image'] = $row['image_url'];
+                }
+            }
+        } else {
+            $row['display_image'] = null;
+        }
+        
+        $free_articles[] = $row;
+    }
+
+    // Get PREMIUM articles
+    $premium_query = "SELECT 
+                        a.article_id, 
+                        a.title, 
+                        a.content, 
+                        a.publication_date,
+                        a.view_count,
+                        a.post_status,
+                        u.full_name as author_name,
+                        u.username as author_username,
+                        c.name as category_name,
+                        i.filename as image_filename,
+                        i.url as image_url,
+                        i.is_external
+                      FROM articles a
+                      LEFT JOIN users u ON a.author_id = u.id
+                      LEFT JOIN categories c ON a.category_id = c.category_id
+                      LEFT JOIN images i ON a.featured_image_id = i.id
+                      WHERE a.article_status = 'published' AND a.post_status = 'Premium'
+                      ORDER BY a.publication_date DESC 
+                      LIMIT 15";
+
+    $premium_result = mysqli_query($koneksi, $premium_query);
+    
+    if (!$premium_result) {
+        throw new Exception("Query premium articles gagal: " . mysqli_error($koneksi));
+    }
+    
+    while ($row = mysqli_fetch_assoc($premium_result)) {
+        if (!empty($row['image_filename'])) {
+            if ($row['is_external'] && !empty($row['image_url'])) {
+                $row['display_image'] = $row['image_url'];
+            } else {
+                $possible_paths = [
+                    'uploads/articles/published/' . $row['image_filename'],
+                    'uploads/articles/' . $row['image_filename'],
+                    $row['image_filename']
+                ];
+                
+                $row['display_image'] = null;
+                foreach ($possible_paths as $path) {
+                    if (file_exists($path)) {
+                        $row['display_image'] = $path;
+                        break;
+                    }
+                }
+                
+                if (!$row['display_image'] && !empty($row['image_url'])) {
+                    $row['display_image'] = $row['image_url'];
+                }
+            }
+        } else {
+            $row['display_image'] = null;
+        }
+        
+        $premium_articles[] = $row;
+    }
+
+    // Get popular articles
     $popular_query = "SELECT 
                         a.article_id, 
                         a.title, 
                         a.publication_date,
                         a.view_count,
+                        a.post_status,
                         c.name as category_name
-                     FROM articles a
-                     LEFT JOIN categories c ON a.category_id = c.category_id
-                     WHERE a.article_status = 'published'
-                     ORDER BY a.view_count DESC, a.publication_date DESC 
-                     LIMIT 5";
+                      FROM articles a
+                      LEFT JOIN categories c ON a.category_id = c.category_id
+                      WHERE a.article_status = 'published'
+                      ORDER BY a.view_count DESC, a.publication_date DESC 
+                      LIMIT 5";
 
     $popular_result = mysqli_query($koneksi, $popular_query);
     
     if (!$popular_result) {
-        throw new Exception("Query populer gagal: " . mysqli_error($koneksi));
+        throw new Exception("Query popular gagal: " . mysqli_error($koneksi));
+    }
+    
+    while ($row = mysqli_fetch_assoc($popular_result)) {
+        $popular_articles[] = $row;
     }
 
-    // Query kategori dengan jumlah artikel
+    // Get categories
     $categories_query = "SELECT 
                           c.category_id, 
                           c.name, 
@@ -110,17 +187,55 @@ try {
     
     $categories_result = mysqli_query($koneksi, $categories_query);
     
-    if (!$categories_result) {
-        throw new Exception("Query kategori gagal: " . mysqli_error($koneksi));
+    if ($categories_result) {
+        while ($row = mysqli_fetch_assoc($categories_result)) {
+            $categories_data[] = $row;
+        }
     }
 
 } catch (Exception $e) {
-    error_log("Error dalam berita.php: " . $e->getMessage());
-    $error_occurred = true;
-    $error_message_detail = $e->getMessage();
+    error_log("Error in index.php: " . $e->getMessage());
+    $error_display = '<div class="alert alert-danger">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        Gagal memuat data: ' . htmlspecialchars($e->getMessage()) . '
+    </div>';
 }
 
-// Handle error messages dari URL parameter
+// Gabungkan artikel dengan pola bergantian
+$merged_articles = [];
+$free_index = 0;
+$premium_index = 0;
+$batch_size_free = 4; // 4 artikel free per batch
+$batch_size_premium = 3; // 3 artikel premium per batch
+
+while ($free_index < count($free_articles) || $premium_index < count($premium_articles)) {
+    // Tambahkan batch FREE
+    for ($i = 0; $i < $batch_size_free && $free_index < count($free_articles); $i++) {
+        $merged_articles[] = [
+            'type' => 'free',
+            'data' => $free_articles[$free_index++]
+        ];
+    }
+    
+    // Tambahkan divider jika ada premium articles
+    if ($premium_index < count($premium_articles) && count($merged_articles) > 0) {
+        $merged_articles[] = ['type' => 'divider_premium'];
+    }
+    
+    // Tambahkan batch PREMIUM
+    for ($i = 0; $i < $batch_size_premium && $premium_index < count($premium_articles); $i++) {
+        $merged_articles[] = [
+            'type' => 'premium',
+            'data' => $premium_articles[$premium_index++]
+        ];
+    }
+    
+    // Tambahkan divider jika masih ada free articles
+    if ($free_index < count($free_articles) && count($merged_articles) > 0) {
+        $merged_articles[] = ['type' => 'divider_free'];
+    }
+}
+
 $error_message = '';
 if (isset($_GET['error'])) {
     switch ($_GET['error']) {
@@ -131,56 +246,14 @@ if (isset($_GET['error'])) {
             $error_message = 'Artikel tidak ditemukan';
             break;
         case 'database_error':
-            $error_message = 'Kesalahan database. Silakan coba lagi nanti.';
+            $error_message = 'Kesalahan database';
             break;
-        default:
-            $error_message = 'Terjadi kesalahan';
     }
 }
 
-// Function helper untuk mendapatkan URL gambar yang benar
-function getArticleImageUrl($image_filename, $image_url, $is_external = false) {
-    if (empty($image_filename) && empty($image_url)) {
-        return null;
-    }
-    
-    // Jika gambar eksternal dan ada URL
-    if ($is_external && !empty($image_url)) {
-        return $image_url;
-    }
-    
-    // Jika ada filename lokal
-    if (!empty($image_filename)) {
-        // Cek berbagai kemungkinan path
-        $possible_paths = [
-            'uploads/articles/published/' . $image_filename,
-            'uploads/articles/' . $image_filename,
-            'ajax/../uploads/articles/' . $image_filename,
-            $image_filename
-        ];
-        
-        foreach ($possible_paths as $path) {
-            if (file_exists($path)) {
-                return $path;
-            }
-        }
-        
-        // Jika file lokal tidak ditemukan, coba gunakan URL jika ada
-        if (!empty($image_url)) {
-            return $image_url;
-        }
-        
-        // Return path default
-        return 'uploads/articles/' . $image_filename;
-    }
-    
-    // Fallback ke URL jika ada
-    return $image_url;
-}
-
-// Flush output buffer
 ob_end_flush();
 ?>
+<link rel="stylesheet" href="style/berita.css">
 
 <!-- Main Content -->
 <div class="container main-content mt-2">
@@ -188,85 +261,55 @@ ob_end_flush();
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
         <i class="fas fa-exclamation-triangle me-2"></i>
         <?php echo htmlspecialchars($error_message); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-    <?php endif; ?>
-
-    <?php if ($error_occurred): ?>
-    <div class="alert alert-warning alert-dismissible fade show" role="alert">
-        <i class="fas fa-exclamation-circle me-2"></i>
-        <strong>Peringatan:</strong> Terjadi masalah saat memuat data.
-        <?php if (isset($error_message_detail)): ?>
-        <br><small>Detail: <?php echo htmlspecialchars($error_message_detail); ?></small>
-        <?php endif; ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
     <?php endif; ?>
-    <link rel="stylesheet" href="style/berita.css">
+
+    <?php if (isset($error_display)): ?>
+    <?php echo $error_display; ?>
+    <?php endif; ?>
 
     <div class="row">
         <div class="col-lg-8">
-            <!-- Hero Carousel - PERBAIKAN LENGKAP -->
+            <!-- Hero Carousel -->
+            <?php if (!empty($free_articles) || !empty($premium_articles)): ?>
+            <?php 
+            $carousel_items = array_merge(
+                array_slice($free_articles, 0, 2),
+                array_slice($premium_articles, 0, 1)
+            );
+            ?>
             <div id="heroCarousel" class="carousel slide" data-bs-ride="carousel" data-bs-interval="5000">
                 <div class="carousel-inner">
-                    <?php 
-                    // Reset pointer untuk carousel
-                    $carousel_count = 0;
-                    if ($news_result && mysqli_num_rows($news_result) > 0) {
-                        mysqli_data_seek($news_result, 0);
-                        while ($carousel_article = mysqli_fetch_assoc($news_result) and $carousel_count < 3): 
-                            $carousel_count++;
-                            $carousel_active = ($carousel_count == 1) ? 'active' : '';
-                            $carousel_image = getArticleImageUrl(
-                                $carousel_article['image_filename'], 
-                                $carousel_article['image_url'], 
-                                $carousel_article['is_external']
-                            );
-                    ?>
-                    <div class="carousel-item <?php echo $carousel_active; ?>"
-                         onclick="window.location.href='artikel.php?id=<?php echo $carousel_article['article_id']; ?>'"
+                    <?php foreach ($carousel_items as $idx => $article): ?>
+                    <div class="carousel-item <?php echo $idx === 0 ? 'active' : ''; ?>" 
+                         onclick="window.location.href='artikel.php?id=<?php echo $article['article_id']; ?>'"
                          style="cursor: pointer;">
-                        <?php if ($carousel_image): ?>
-                        <img src="<?php echo htmlspecialchars($carousel_image); ?>" 
+                        <?php if (!empty($article['display_image'])): ?>
+                        <img src="<?php echo htmlspecialchars($article['display_image']); ?>" 
                              class="d-block w-100" 
-                             alt="<?php echo htmlspecialchars($carousel_article['title']); ?>"
+                             alt="<?php echo htmlspecialchars($article['title']); ?>"
                              onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                        <?php endif; ?>
-                        
-                        <div class="d-block w-100 bg-secondary align-items-center justify-content-center <?php echo $carousel_image ? 'd-none' : 'd-flex'; ?>" 
+                        <?php else: ?>
+                        <div class="d-block w-100 bg-secondary d-flex align-items-center justify-content-center" 
                              style="height: 400px;">
                             <i class="fas fa-newspaper fa-4x text-white"></i>
                         </div>
-                        
+                        <?php endif; ?>
                         <div class="carousel-caption">
-                            <h5><?php echo htmlspecialchars(mb_substr($carousel_article['title'], 0, 100)); ?><?php echo mb_strlen($carousel_article['title']) > 100 ? '...' : ''; ?></h5>
-                            <p><?php echo htmlspecialchars($carousel_article['category_name'] ?? 'Berita'); ?> • 
-                               <?php echo date('d M Y', strtotime($carousel_article['publication_date'])); ?></p>
+                            <?php if ($article['post_status'] === 'Premium'): ?>
+                            <span class="premium-badge mb-2">
+                                <i class="fas fa-crown"></i> PREMIUM
+                            </span>
+                            <?php endif; ?>
+                            <h5><?php echo htmlspecialchars(mb_substr($article['title'], 0, 100)); ?><?php echo mb_strlen($article['title']) > 100 ? '...' : ''; ?></h5>
+                            <p><?php echo htmlspecialchars(mb_substr(strip_tags($article['content']), 0, 120)); ?>...</p>
                         </div>
                     </div>
-                    <?php endwhile; } ?>
-                    
-                    <!-- Fallback jika tidak ada artikel -->
-                    <?php if (!$news_result || $carousel_count == 0): ?>
-                    <div class="carousel-item active">
-                        <div class="d-block w-100 bg-secondary d-flex align-items-center justify-content-center" 
-                             style="height: 400px;">
-                            <div class="text-center text-white">
-                                <i class="fas fa-newspaper fa-4x mb-3"></i>
-                                <h5>Portal Berita Terpercaya</h5>
-                                <p>Menghadirkan berita terkini dan terpercaya</p>
-                            </div>
-                        </div>
-                        <div class="carousel-caption">
-                            <h5>Selamat Datang di Portal Berita</h5>
-                            <p>Dapatkan informasi terkini dan terpercaya</p>
-                        </div>
-                    </div>
-                    <?php endif; ?>
+                    <?php endforeach; ?>
                 </div>
                 
-                <!-- Carousel Controls -->
-                <?php if ($carousel_count > 1): ?>
+                <?php if (count($carousel_items) > 1): ?>
                 <button class="carousel-control-prev" type="button" data-bs-target="#heroCarousel" data-bs-slide="prev" onclick="event.stopPropagation();">
                     <span class="carousel-control-prev-icon" aria-hidden="true"></span>
                     <span class="visually-hidden">Kembali</span>
@@ -277,50 +320,78 @@ ob_end_flush();
                 </button>
                 <?php endif; ?>
             </div>
+            <?php endif; ?>
 
-            <!-- News Feed -->
+            <!-- News Feed dengan Pola Bergantian -->
             <div class="news-feed mt-4">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h4><i class="fas fa-newspaper me-2 text-primary"></i>Berita Terbaru</h4>
-                    <span class="badge bg-secondary fs-6"><?php echo number_format($total_articles); ?> artikel</span>
+                    <div class="d-flex gap-2">
+                        <span class="badge bg-secondary fs-6">
+                            <i class="fas fa-file-alt"></i> <?php echo count($free_articles); ?> Free
+                        </span>
+                        <span class="badge fs-6" style="background: linear-gradient(135deg, #FFD700, #FFA500); color: #000;">
+                            <i class="fas fa-crown"></i> <?php echo count($premium_articles); ?> Premium
+                        </span>
+                    </div>
                 </div>
 
-                <?php if ($news_result && mysqli_num_rows($news_result) > 0): ?>
-                    <?php 
-                    // Reset pointer untuk daftar berita
-                    mysqli_data_seek($news_result, 0);
-                    $news_count = 0;
-                    ?>
-                    <?php while ($news = mysqli_fetch_assoc($news_result)): ?>
-                    <?php 
-                    $news_count++; 
-                    $news_image = getArticleImageUrl($news['image_filename'], $news['image_url'], $news['is_external']);
-                    ?>
-                    <article class="news-item">
-                        <?php if ($news_image): ?>
-                        <img src="<?php echo htmlspecialchars($news_image); ?>"
+                <?php if (!empty($merged_articles)): ?>
+                <?php foreach ($merged_articles as $item): ?>
+                    <?php if ($item['type'] === 'divider_premium'): ?>
+                    <div class="section-divider premium-section">
+                        <h5>
+                            <i class="fas fa-crown"></i>
+                            <span>BERITA PREMIUM</span>
+                            <i class="fas fa-crown"></i>
+                        </h5>
+                    </div>
+                    
+                    <?php elseif ($item['type'] === 'divider_free'): ?>
+                    <div class="section-divider">
+                        <h5>
+                            <i class="fas fa-newspaper"></i>
+                            <span>BERITA FREE</span>
+                            <i class="fas fa-newspaper"></i>
+                        </h5>
+                    </div>
+                    
+                    <?php else: ?>
+                    <?php $news = $item['data']; ?>
+                    <article class="news-item <?php echo $item['type']; ?>">
+                        <?php if (!empty($news['display_image'])): ?>
+                        <img src="<?php echo htmlspecialchars($news['display_image']); ?>"
                              alt="<?php echo htmlspecialchars($news['title']); ?>" 
                              class="news-image"
                              loading="lazy"
                              onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';">
                         <?php endif; ?>
                         
-                        <div class="news-image bg-secondary <?php echo $news_image ? 'd-none' : 'd-flex'; ?> align-items-center justify-content-center">
+                        <div class="news-image bg-secondary <?php echo !empty($news['display_image']) ? 'd-none' : 'd-flex'; ?> align-items-center justify-content-center">
                             <i class="fas fa-newspaper fa-2x text-white"></i>
                         </div>
 
                         <div class="news-content">
+                            <?php if ($news['post_status'] === 'Premium'): ?>
+                            <span class="premium-badge mb-2">
+                                <i class="fas fa-crown"></i> PREMIUM
+                            </span>
+                            <?php endif; ?>
+                            
                             <div class="news-meta">
                                 <i class="fas fa-calendar me-1"></i>
                                 <?php echo date('d F Y', strtotime($news['publication_date'])); ?>
-                                <?php if ($news['category_name']): ?>
+                                <?php if (!empty($news['category_name'])): ?>
                                 • <i class="fas fa-tag me-1"></i><?php echo htmlspecialchars($news['category_name']); ?>
                                 <?php endif; ?>
-                                <?php if ($news['author_name']): ?>
+                                <?php if (!empty($news['author_name'])): ?>
                                 • <i class="fas fa-user me-1"></i><?php echo htmlspecialchars($news['author_name']); ?>
                                 <?php endif; ?>
                                 <?php if ($news['view_count'] > 0): ?>
-                                • <i class="fas fa-eye me-1"></i><?php echo number_format($news['view_count']); ?> views
+                                • <i class="fas fa-eye me-1"></i><?php echo number_format($news['view_count']); ?>
+                                <?php endif; ?>
+                                <?php if ($news['post_status'] === 'Premium'): ?>
+                                • <span class="premium-indicator"><i class="fas fa-star"></i> Premium</span>
                                 <?php endif; ?>
                             </div>
                             <h6 class="news-title">
@@ -329,26 +400,19 @@ ob_end_flush();
                                     <?php echo htmlspecialchars($news['title']); ?>
                                 </a>
                             </h6>
+                            <p class="news-excerpt text-muted">
+                                <?php echo htmlspecialchars(mb_substr(strip_tags($news['content']), 0, 120)); ?>...
+                            </p>
                         </div>
                     </article>
-                    <?php endwhile; ?>
-                    
-                    <?php if ($news_count == 0): ?>
-                    <div class="alert alert-info text-center">
-                        <i class="fas fa-info-circle fa-2x mb-3"></i>
-                        <h5>Belum Ada Berita</h5>
-                        <p>Saat ini belum ada berita yang tersedia. Silakan kembali lagi nanti.</p>
-                    </div>
                     <?php endif; ?>
-                    
+                <?php endforeach; ?>
+
                 <?php else: ?>
-                <div class="alert alert-warning text-center">
-                    <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
-                    <h5>Gagal Memuat Berita</h5>
-                    <p>Terjadi masalah saat memuat berita. Silakan refresh halaman ini.</p>
-                    <button class="btn btn-primary" onclick="window.location.reload()">
-                        <i class="fas fa-sync-alt me-1"></i>Refresh
-                    </button>
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle fa-2x mb-3"></i>
+                    <h5>Belum Ada Berita</h5>
+                    <p>Saat ini belum ada berita yang tersedia. Silakan kembali lagi nanti.</p>
                 </div>
                 <?php endif; ?>
             </div>
@@ -356,36 +420,40 @@ ob_end_flush();
 
         <!-- Sidebar -->
         <div class="col-lg-4">
-            <!-- Berita Terpopuler -->
             <div class="sidebar">
                 <div class="sidebar-header">
                     <i class="fas fa-fire me-2 text-danger"></i>Berita Terpopuler
                 </div>
 
-                <?php if ($popular_result && mysqli_num_rows($popular_result) > 0): ?>
-                    <?php $counter = 1; ?>
-                    <?php while ($popular = mysqli_fetch_assoc($popular_result)): ?>
-                    <div class="trending-item">
-                        <div class="trending-number"><?php echo $counter; ?></div>
-                        <div class="trending-content">
-                            <a href="artikel.php?id=<?php echo $popular['article_id']; ?>" 
-                               class="text-decoration-none">
-                                <?php echo htmlspecialchars($popular['title']); ?>
-                            </a>
-                            <div class="text-muted small mt-1">
-                                <i class="fas fa-calendar me-1"></i>
-                                <?php echo date('d M Y', strtotime($popular['publication_date'])); ?>
-                                <?php if ($popular['view_count'] > 0): ?>
-                                • <i class="fas fa-eye me-1"></i><?php echo number_format($popular['view_count']); ?>
-                                <?php endif; ?>
-                                <?php if ($popular['category_name']): ?>
-                                • <?php echo htmlspecialchars($popular['category_name']); ?>
-                                <?php endif; ?>
-                            </div>
+                <?php if (!empty($popular_articles)): ?>
+                <?php $counter = 1; ?>
+                <?php foreach ($popular_articles as $popular): ?>
+                <div class="trending-item">
+                    <div class="trending-number bg-danger"><?php echo $counter; ?></div>
+                    <div class="trending-content">
+                        <?php if ($popular['post_status'] === 'Premium'): ?>
+                        <span class="premium-badge mb-1" style="font-size: 9px; padding: 2px 8px;">
+                            <i class="fas fa-crown"></i> PREMIUM
+                        </span>
+                        <?php endif; ?>
+                        <a href="artikel.php?id=<?php echo $popular['article_id']; ?>" 
+                           class="text-decoration-none">
+                            <?php echo htmlspecialchars($popular['title']); ?>
+                        </a>
+                        <div class="text-muted small mt-1">
+                            <i class="fas fa-calendar me-1"></i>
+                            <?php echo date('d M Y', strtotime($popular['publication_date'])); ?>
+                            <?php if ($popular['view_count'] > 0): ?>
+                            • <i class="fas fa-eye me-1"></i><?php echo number_format($popular['view_count']); ?>
+                            <?php endif; ?>
+                            <?php if (!empty($popular['category_name'])): ?>
+                            • <?php echo htmlspecialchars($popular['category_name']); ?>
+                            <?php endif; ?>
                         </div>
                     </div>
-                    <?php $counter++; ?>
-                    <?php endwhile; ?>
+                </div>
+                <?php $counter++; ?>
+                <?php endforeach; ?>
                 <?php else: ?>
                 <div class="text-center text-muted py-3">
                     <i class="fas fa-chart-line fa-2x mb-2"></i>
@@ -394,14 +462,13 @@ ob_end_flush();
                 <?php endif; ?>
             </div>
 
-            <!-- Categories Widget -->
-            <?php if ($categories_result && mysqli_num_rows($categories_result) > 0): ?>
+            <?php if (!empty($categories_data)): ?>
             <div class="sidebar mt-3">
                 <div class="sidebar-header">
                     <i class="fas fa-list me-2 text-primary"></i>Kategori Berita
                 </div>
                 <div class="p-3">
-                    <?php while ($category = mysqli_fetch_assoc($categories_result)): ?>
+                    <?php foreach ($categories_data as $category): ?>
                     <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded hover-shadow">
                         <a href="kategori.php?id=<?php echo $category['category_id']; ?>"
                             class="text-decoration-none text-dark fw-bold">
@@ -412,12 +479,11 @@ ob_end_flush();
                             <?php echo number_format($category['article_count']); ?>
                         </span>
                     </div>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                 </div>
             </div>
             <?php endif; ?>
 
-            <!-- Statistik Website -->
             <div class="sidebar mt-3">
                 <div class="sidebar-header">
                     <i class="fas fa-chart-bar me-2 text-success"></i>Statistik
@@ -430,13 +496,9 @@ ob_end_flush();
                         </div>
                         <div class="col-6">
                             <?php 
-                            // Hitung kategori aktif
                             $active_categories = 0;
-                            if ($categories_result) {
-                                mysqli_data_seek($categories_result, 0);
-                                while ($cat = mysqli_fetch_assoc($categories_result)) {
-                                    if ($cat['article_count'] > 0) $active_categories++;
-                                }
+                            foreach ($categories_data as $cat) {
+                                if ($cat['article_count'] > 0) $active_categories++;
                             }
                             ?>
                             <div class="fw-bold fs-4 text-success"><?php echo $active_categories; ?></div>
@@ -451,149 +513,4 @@ ob_end_flush();
 
 <hr class="border-3 border-dark my-4">
 
-<!-- CSS Tambahan untuk styling yang lebih baik -->
-<style>
-.news-item {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    border-radius: 8px;
-    padding: 10px;
-    margin-bottom: 20px;
-    cursor: pointer;
-}
-
-.news-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    background-color: #f8f9fa;
-}
-
-.news-title a:hover {
-    color: #0d6efd !important;
-}
-
-.trending-item {
-    transition: background-color 0.2s ease;
-    border-radius: 6px;
-    padding: 8px;
-}
-
-.trending-item:hover {
-    background-color: #f8f9fa;
-}
-
-.hover-shadow:hover {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    transform: translateY(-1px);
-    transition: all 0.2s ease;
-}
-
-.badge {
-    font-size: 0.75em;
-}
-
-.news-meta {
-    font-size: 0.85em;
-    color: #6c757d;
-}
-
-.sidebar-header {
-    background: linear-gradient(135deg, #6c757d, #495057);
-    color: white;
-    padding: 12px 15px;
-    border-radius: 8px 8px 0 0;
-    font-weight: bold;
-}
-
-.sidebar {
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    border-radius: 8px;
-    overflow: hidden;
-}
-</style>
-
-<!-- JavaScript untuk enhancement -->
-<script>
-// Image lazy loading error handling
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Berita page loaded successfully');
-    
-    // Debug: Cek koneksi database
-    <?php if ($error_occurred): ?>
-    console.error('Database error occurred');
-    <?php endif; ?>
-    
-    <?php if ($news_result): ?>
-    console.log('Total berita: <?php echo mysqli_num_rows($news_result); ?>');
-    <?php endif; ?>
-});
-
-// Global error handler
-window.addEventListener('error', function(event) {
-    if (event.message.includes('Could not establish connection') || 
-        event.message.includes('Extension context invalidated')) {
-        console.warn('Browser extension error suppressed');
-        event.preventDefault();
-        return false;
-    }
-});
-</script>
-
-<!-- Ban Notification System (hanya untuk user yang login) -->
-<?php if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true): ?>
-<script>
-// Ban notification system - single load only
-(function() {
-    'use strict';
-
-    if (window.banNotificationSystemLoaded) {
-        console.log('Ban system already loaded, skipping');
-        return;
-    }
-
-    window.banNotificationSystemLoaded = true;
-    console.log('Loading ban notification for logged in user');
-
-    // Set body attributes for user identification
-    document.body.classList.add('logged-in');
-    document.body.setAttribute('data-user-id', '<?php echo intval($_SESSION['user_id'] ?? $_SESSION['id'] ?? 0); ?>');
-    document.body.setAttribute('data-username', '<?php echo htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES); ?>');
-    document.body.setAttribute('data-page', 'berita');
-
-    // Load ban notification script jika ada
-    const script = document.createElement('script');
-    script.src = 'js/notif-ban.js?v=' + Date.now();
-    script.onload = function() {
-        console.log('Ban notification script loaded');
-
-        // Wait for initialization
-        const checkInit = setInterval(() => {
-            if (window.banNotificationManager && window.banNotificationManager.isInitialized) {
-                console.log('Ban notification system ready');
-                clearInterval(checkInit);
-
-                // Initial check after 5 seconds
-                setTimeout(() => {
-                    console.log('Initial ban check');
-                    window.banNotificationManager.forceCheck();
-                }, 5000);
-            }
-        }, 1000);
-    };
-
-    script.onerror = function() {
-        console.log('Ban notification script not available');
-    };
-
-    document.head.appendChild(script);
-})();
-</script>
-<?php else: ?>
-<script>
-console.log('User not logged in, ban notification skipped');
-</script>
-<?php endif; ?>
-
-<?php
-// Include footer
-require_once 'footer.php';
-?>
+<?php require_once 'footer.php'; ?>

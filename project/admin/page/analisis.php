@@ -1,721 +1,537 @@
 <?php
-// admin/page/analisis.php - Halaman Analisis
-if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    header("Location: ../config/login.php");
-    exit();
-}
-
-// Check if user is admin
-if (!isset($_SESSION['user_role']) || strtolower($_SESSION['user_role']) !== 'admin') {
-    header("Location: ../login.php?error=access_denied");
-    exit();
-}
-
-// Get date range for filtering (default: last 30 days)
+// Get date range (default last 30 days)
 $end_date = date('Y-m-d');
 $start_date = date('Y-m-d', strtotime('-30 days'));
 
 if (isset($_GET['start_date']) && isset($_GET['end_date'])) {
-    $start_date = sanitize_input($_GET['start_date']);
-    $end_date = sanitize_input($_GET['end_date']);
+    $start_date = mysqli_real_escape_string($koneksi, $_GET['start_date']);
+    $end_date = mysqli_real_escape_string($koneksi, $_GET['end_date']);
 }
 
-// Get total statistics
-$total_articles_query = "SELECT COUNT(*) as total FROM articles";
-$total_articles_result = mysqli_query($koneksi, $total_articles_query);
-$total_articles = mysqli_fetch_assoc($total_articles_result)['total'];
+$date_diff = (strtotime($end_date) - strtotime($start_date)) / (60 * 60 * 24) + 1;
 
-$total_users_query = "SELECT COUNT(*) as total FROM users";
-$total_users_result = mysqli_query($koneksi, $total_users_query);
-$total_users = mysqli_fetch_assoc($total_users_result)['total'];
+// Get visitor statistics
+$visitor_stats = ['total_unique' => 0, 'total_visits' => 0, 'total_pageviews' => 0, 'avg_daily_visitors' => 0];
+$visitor_query = "SELECT SUM(unique_visitors) as total_unique, SUM(total_visits) as total_visits, SUM(page_views) as total_pageviews, AVG(unique_visitors) as avg_daily_visitors FROM visitor_stats WHERE stat_date BETWEEN '$start_date' AND '$end_date'";
+$visitor_result = mysqli_query($koneksi, $visitor_query);
+if ($visitor_result) $visitor_stats = mysqli_fetch_assoc($visitor_result);
 
-$total_categories_query = "SELECT COUNT(*) as total FROM categories";
-$total_categories_result = mysqli_query($koneksi, $total_categories_query);
-$total_categories = mysqli_fetch_assoc($total_categories_result)['total'];
+// Get daily breakdown
+$daily_stats = [];
+$daily_query = "SELECT stat_date, unique_visitors, total_visits, page_views FROM visitor_stats WHERE stat_date BETWEEN '$start_date' AND '$end_date' ORDER BY stat_date ASC";
+$daily_result = mysqli_query($koneksi, $daily_query);
+if ($daily_result) $daily_stats = mysqli_fetch_all($daily_result, MYSQLI_ASSOC);
 
-$total_comments_query = "SELECT COUNT(*) as total FROM comments";
-$total_comments_result = mysqli_query($koneksi, $total_comments_query);
-$total_comments = mysqli_fetch_assoc($total_comments_result)['total'];
+// Get article statistics
+$article_stats = ['total_articles' => 0, 'total_views' => 0];
+$article_query = "SELECT COUNT(*) as total_articles, SUM(view_count) as total_views FROM articles WHERE article_status = 'published'";
+$article_result = mysqli_query($koneksi, $article_query);
+if ($article_result) $article_stats = mysqli_fetch_assoc($article_result);
 
-// Get article statistics by status
-$article_status_query = "SELECT 
-    article_status, 
-    COUNT(*) as count 
-FROM articles 
-GROUP BY article_status";
-$article_status_result = mysqli_query($koneksi, $article_status_query);
-$article_status_stats = [];
-while ($row = mysqli_fetch_assoc($article_status_result)) {
-    $article_status_stats[$row['article_status']] = $row['count'];
+// Get top articles
+$top_articles = [];
+$top_query = "SELECT a.title, a.view_count, a.publication_date, c.name as category_name, u.full_name as author_name FROM articles a LEFT JOIN categories c ON a.category_id = c.category_id LEFT JOIN users u ON a.author_id = u.id WHERE a.article_status = 'published' ORDER BY a.view_count DESC LIMIT 10";
+$top_result = mysqli_query($koneksi, $top_query);
+if ($top_result) $top_articles = mysqli_fetch_all($top_result, MYSQLI_ASSOC);
+
+// Get category statistics
+$category_stats = [];
+$cat_query = "SELECT c.name, COUNT(a.article_id) as article_count, COALESCE(SUM(a.view_count), 0) as total_views FROM categories c LEFT JOIN articles a ON c.category_id = a.category_id AND a.article_status = 'published' GROUP BY c.category_id, c.name ORDER BY total_views DESC";
+$cat_result = mysqli_query($koneksi, $cat_query);
+if ($cat_result) $category_stats = mysqli_fetch_all($cat_result, MYSQLI_ASSOC);
+
+$max_category_views = 1;
+foreach ($category_stats as $cat) if ($cat['total_views'] > $max_category_views) $max_category_views = $cat['total_views'];
+
+// Get engagement
+$engagement_stats = ['active_users' => 0, 'total_comments' => 0];
+$eng_query = "SELECT COUNT(DISTINCT user_id) as active_users, COUNT(*) as total_comments FROM comments WHERE created_at BETWEEN '$start_date 00:00:00' AND '$end_date 23:59:59'";
+$eng_result = mysqli_query($koneksi, $eng_query);
+if ($eng_result) $engagement_stats = mysqli_fetch_assoc($eng_result);
+
+// Get reactions
+$total_likes = 0;
+$total_dislikes = 0;
+$react_query = "SELECT reaction_type, COUNT(*) as count FROM article_reactions WHERE reacted_at BETWEEN '$start_date 00:00:00' AND '$end_date 23:59:59' GROUP BY reaction_type";
+$react_result = mysqli_query($koneksi, $react_query);
+if ($react_result) {
+    while ($row = mysqli_fetch_assoc($react_result)) {
+        if ($row['reaction_type'] == 'like') $total_likes = $row['count'];
+        else if ($row['reaction_type'] == 'dislike') $total_dislikes = $row['count'];
+    }
 }
+$total_reactions = $total_likes + $total_dislikes;
 
-// Get articles by category
-$articles_by_category_query = "SELECT 
-    c.name as category_name, 
-    COUNT(a.article_id) as article_count 
-FROM categories c 
-LEFT JOIN articles a ON c.category_id = a.category_id 
-GROUP BY c.category_id, c.name 
-ORDER BY article_count DESC 
-LIMIT 10";
-$articles_by_category_result = mysqli_query($koneksi, $articles_by_category_query);
+// Get popular pages
+$popular_pages = [];
+$pages_query = "SELECT page_visited, COUNT(*) as visit_count FROM visitors WHERE visit_time BETWEEN '$start_date 00:00:00' AND '$end_date 23:59:59' AND page_visited IS NOT NULL AND page_visited != '' GROUP BY page_visited ORDER BY visit_count DESC LIMIT 5";
+$pages_result = mysqli_query($koneksi, $pages_query);
+if ($pages_result) $popular_pages = mysqli_fetch_all($pages_result, MYSQLI_ASSOC);
 
-// Get recent articles
-$recent_articles_query = "SELECT 
-    a.title, 
-    a.publication_date, 
-    a.article_status,
-    u.username as author_name,
-    c.name as category_name
-FROM articles a 
-JOIN users u ON a.author_id = u.id 
-JOIN categories c ON a.category_id = c.category_id 
-ORDER BY a.publication_date DESC 
-LIMIT 10";
-$recent_articles_result = mysqli_query($koneksi, $recent_articles_query);
-
-// Get user statistics by role
-$user_role_query = "SELECT 
-    role, 
-    COUNT(*) as count 
-FROM users 
-GROUP BY role";
-$user_role_result = mysqli_query($koneksi, $user_role_query);
-$user_role_stats = [];
-while ($row = mysqli_fetch_assoc($user_role_result)) {
-    $user_role_stats[$row['role']] = $row['count'];
-}
-
-// Get monthly article statistics (last 6 months)
-$monthly_stats_query = "SELECT 
-    DATE_FORMAT(publication_date, '%Y-%m') as month,
-    COUNT(*) as count
-FROM articles 
-WHERE publication_date >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
-GROUP BY DATE_FORMAT(publication_date, '%Y-%m')
-ORDER BY month ASC";
-$monthly_stats_result = mysqli_query($koneksi, $monthly_stats_query);
-$monthly_stats = [];
-while ($row = mysqli_fetch_assoc($monthly_stats_result)) {
-    $monthly_stats[$row['month']] = $row['count'];
-}
-
-// Get top authors
-$top_authors_query = "SELECT 
-    u.username, 
-    u.full_name,
-    COUNT(a.article_id) as article_count 
-FROM users u 
-LEFT JOIN articles a ON u.id = a.author_id 
-WHERE u.role IN ('admin', 'penulis')
-GROUP BY u.id, u.username, u.full_name 
-ORDER BY article_count DESC 
-LIMIT 10";
-$top_authors_result = mysqli_query($koneksi, $top_authors_query);
+// Get author stats
+$author_stats = [];
+$author_query = "SELECT u.full_name, u.username, COUNT(a.article_id) as article_count, COALESCE(SUM(a.view_count), 0) as total_views FROM users u LEFT JOIN articles a ON u.id = a.author_id AND a.article_status = 'published' WHERE u.role IN ('penulis', 'admin') GROUP BY u.id HAVING article_count > 0 ORDER BY total_views DESC LIMIT 5";
+$author_result = mysqli_query($koneksi, $author_query);
+if ($author_result) $author_stats = mysqli_fetch_all($author_result, MYSQLI_ASSOC);
 ?>
 
-<!DOCTYPE html>
-<html lang="id">
+<style>
+:root {
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    --info-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analisis Website</title>
-    <link rel="icon" href="../project/img/icon.webp" type="image/webp" />
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-    /* Dark theme colors - Same as katagori.php */
-    body {
-        background-color: #1a1a1a;
-        color: #ffffff;
-    }
+.stats-card-modern {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
 
-    .card {
-        background-color: #2d2d2d;
-        border: 1px solid #404040;
-        border-radius: 8px;
-        margin-bottom: 20px;
-    }
+.stats-card-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: var(--primary-gradient);
+}
 
-    .card-header {
-        background-color: #404040;
-        border-bottom: 1px solid #555555;
-        color: #ffffff;
-    }
+.stats-card-modern.success::before { background: var(--success-gradient); }
+.stats-card-modern.warning::before { background: var(--warning-gradient); }
+.stats-card-modern.info::before { background: var(--info-gradient); }
 
-    .card-body {
-        background-color: #2d2d2d;
-        color: #ffffff;
-    }
+.stats-card-modern:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
 
-    .table-responsive {
-        border-radius: 8px;
-        overflow: hidden;
-        background-color: #2d2d2d;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
 
-    .table {
-        margin-bottom: 0;
-        background-color: #2d2d2d;
-        color: #ffffff;
-        min-width: 600px;
-    }
+.stat-icon.primary { background: var(--primary-gradient); }
+.stat-icon.success { background: var(--success-gradient); }
+.stat-icon.warning { background: var(--warning-gradient); }
+.stat-icon.info { background: var(--info-gradient); }
 
-    .table th {
-        background-color: #404040;
-        border-bottom: 2px solid #555555;
-        font-weight: 600;
-        color: #ffffff;
-        white-space: nowrap;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
 
-    .table td {
-        vertical-align: middle;
-        padding: 12px;
-        border-bottom: 1px solid #555555;
-        background-color: #2d2d2d;
-        color: #ffffff;
-        white-space: nowrap;
-    }
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
 
-    .table tbody tr:hover {
-        background-color: #3d3d3d;
-    }
+.stat-change {
+    font-size: 0.75rem;
+    margin-top: 0.5rem;
+    color: #10b981;
+}
 
-    .table tbody tr:hover td {
-        background-color: #3d3d3d;
-    }
+.chart-container {
+    position: relative;
+    height: 350px;
+}
 
-    .badge {
-        font-size: 11px;
-        font-weight: 600;
-        padding: 4px 8px;
-        border-radius: 4px;
-        color: #ffffff;
-    }
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.875rem;
+}
 
-    .badge-published {
-        background-color: #28a745 !important;
-    }
+.rank-badge.gold { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: #000; }
+.rank-badge.silver { background: linear-gradient(135deg, #e5e7eb 0%, #9ca3af 100%); color: #000; }
+.rank-badge.bronze { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: #fff; }
 
-    .badge-pending {
-        background-color: #ffc107 !important;
-        color: #000 !important;
-    }
+.category-bar {
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0.5rem 0;
+}
 
-    .badge-draft {
-        background-color: #6c757d !important;
-    }
+.category-bar-fill {
+    height: 100%;
+    background: var(--primary-gradient);
+    transition: width 0.5s ease;
+}
 
-    .badge-rejected {
-        background-color: #dc3545 !important;
-    }
+.engagement-metric {
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    border-left: 4px solid;
+}
 
-    .form-control {
-        background-color: #404040;
-        border: 1px solid #555555;
-        color: #ffffff;
-    }
+.engagement-metric.likes { border-left-color: #10b981; }
+.engagement-metric.dislikes { border-left-color: #ef4444; }
+.engagement-metric.comments { border-left-color: #3b82f6; }
+.engagement-metric.users { border-left-color: #f59e0b; }
 
-    .form-control:focus {
-        background-color: #404040;
-        border-color: #6c757d;
-        color: #ffffff;
-        box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
-    }
+@media (max-width: 768px) {
+    .stats-card-modern { padding: 1rem; }
+    .stat-icon { width: 48px; height: 48px; font-size: 1.25rem; }
+    .stat-value { font-size: 1.5rem; }
+    .chart-container { height: 250px; }
+}
+</style>
 
-    .form-select {
-        background-color: #404040;
-        border: 1px solid #555555;
-        color: #ffffff;
-    }
-
-    .form-select:focus {
-        background-color: #404040;
-        border-color: #6c757d;
-        color: #ffffff;
-        box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
-    }
-
-    .form-label {
-        color: #ffffff;
-    }
-
-    .btn-primary {
-        background-color: #6c757d;
-        border-color: #6c757d;
-    }
-
-    .btn-primary:hover {
-        background-color: #5a6268;
-        border-color: #5a6268;
-    }
-
-    .text-muted {
-        color: #adb5bd !important;
-    }
-
-    .stats-card {
-        background: linear-gradient(135deg, #404040 0%, #2d2d2d 100%);
-        border: 1px solid #555555;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 20px;
-        text-align: center;
-    }
-
-    .stats-card .stats-number {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #ffffff;
-        margin-bottom: 10px;
-    }
-
-    .stats-card .stats-label {
-        color: #adb5bd;
-        font-size: 1rem;
-        margin-bottom: 5px;
-    }
-
-    .stats-card .stats-icon {
-        font-size: 3rem;
-        color: #6c757d;
-        margin-bottom: 10px;
-    }
-
-    .chart-container {
-        position: relative;
-        height: 400px;
-        background-color: #2d2d2d;
-        border-radius: 8px;
-        padding: 20px;
-    }
-
-    .no-data {
-        color: #adb5bd !important;
-    }
-
-    .scroll-hint {
-        display: none;
-        background-color: #404040;
-        color: #adb5bd;
-        padding: 8px 12px;
-        border-radius: 4px;
-        font-size: 12px;
-        text-align: center;
-        margin-bottom: 10px;
-    }
-
-    /* Mobile responsive */
-    @media (max-width: 768px) {
-        .container-fluid {
-            padding: 15px;
-        }
-
-        .scroll-hint {
-            display: block;
-        }
-
-        .table-responsive {
-            font-size: 13px;
-            border: 1px solid #555555;
-            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .table {
-            min-width: 700px;
-        }
-
-        .table th,
-        .table td {
-            padding: 10px 8px;
-            font-size: 12px;
-        }
-
-        .stats-card .stats-number {
-            font-size: 2rem;
-        }
-
-        .stats-card .stats-icon {
-            font-size: 2.5rem;
-        }
-
-        .chart-container {
-            height: 300px;
-        }
-    }
-
-    @media (max-width: 576px) {
-        .table-responsive {
-            font-size: 12px;
-            overflow-x: scroll;
-        }
-
-        .table {
-            min-width: 800px;
-        }
-
-
-        .table th,
-        .table td {
-            padding: 8px 6px;
-            font-size: 11px;
-        }
-
-        .stats-card .stats-number {
-            font-size: 1.8rem;
-        }
-
-        .stats-card .stats-icon {
-            font-size: 2rem;
-        }
-
-        .chart-container {
-            height: 250px;
-            position: relative;
-        }
-    }
-
-    /* Scrollbar styling */
-    .table-responsive::-webkit-scrollbar {
-        height: 8px;
-    }
-
-    .table-responsive::-webkit-scrollbar-track {
-        background-color: #404040;
-        border-radius: 4px;
-    }
-
-    .table-responsive::-webkit-scrollbar-thumb {
-        background-color: #6c757d;
-        border-radius: 4px;
-    }
-
-    .table-responsive::-webkit-scrollbar-thumb:hover {
-        background-color: #5a6268;
-    }
-    </style>
-</head>
-
-<body>
-    <div class="container-fluid p-4">
-        <!-- Page Header -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h4 class="card-title mb-0">
-                            <i class="fas fa-chart-line me-2"></i>
-                            Analitik Website
-                        </h4>
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted mb-0">Dashboard analitik dan statistik website</p>
+<div class="mb-4">
+    <div class="card">
+        <div class="card-body">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                <div>
+                    <h2 class="mb-1 h4"><i class="bi bi-graph-up-arrow me-2"></i>Analytics Dashboard</h2>
+                    <small class="text-muted">Analisis mendalam tentang performa website</small>
+                    <div class="mt-2">
+                        <span class="badge bg-secondary"><i class="bi bi-calendar-range me-1"></i><?php echo date('d M Y', strtotime($start_date)); ?> - <?php echo date('d M Y', strtotime($end_date)); ?></span>
+                        <span class="badge bg-info ms-2"><i class="bi bi-clock me-1"></i><?php echo number_format($date_diff); ?> hari</span>
                     </div>
                 </div>
+                <form method="GET" action="" class="d-flex gap-2 flex-wrap">
+                    <input type="hidden" name="page" value="analytics">
+                    <div>
+                        <label class="form-label text-muted mb-1" style="font-size: 0.75rem;">Dari Tanggal</label>
+                        <input type="date" name="start_date" class="form-control form-control-sm" value="<?php echo $start_date; ?>" max="<?php echo date('Y-m-d'); ?>" required>
+                    </div>
+                    <div>
+                        <label class="form-label text-muted mb-1" style="font-size: 0.75rem;">Sampai Tanggal</label>
+                        <input type="date" name="end_date" class="form-control form-control-sm" value="<?php echo $end_date; ?>" max="<?php echo date('Y-m-d'); ?>" required>
+                    </div>
+                    <div class="d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-filter me-1"></i>Filter</button>
+                    </div>
+                </form>
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- Statistics Cards -->
-        <div class="row mb-4">
-            <div class="col-xl-3 col-md-6 mb-3">
-                <div class="stats-card">
-                    <div class="stats-icon">
-                        <i class="fas fa-newspaper"></i>
-                    </div>
-                    <div class="stats-number"><?php echo $total_articles; ?></div>
-                    <div class="stats-label">Total Artikel</div>
-                </div>
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="stats-card-modern">
+            <div class="stat-icon primary"><i class="bi bi-people-fill"></i></div>
+            <div class="stat-value"><?php echo number_format($visitor_stats['total_unique']); ?></div>
+            <div class="stat-label">Unique Visitors</div>
+            <div class="stat-change"><i class="bi bi-arrow-up me-1"></i><?php echo number_format($visitor_stats['avg_daily_visitors'], 1); ?> avg/day</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stats-card-modern success">
+            <div class="stat-icon success"><i class="bi bi-eye-fill"></i></div>
+            <div class="stat-value"><?php echo number_format($visitor_stats['total_pageviews']); ?></div>
+            <div class="stat-label">Page Views</div>
+            <div class="stat-change"><i class="bi bi-arrow-up me-1"></i><?php echo number_format($visitor_stats['total_pageviews'] / max(1, $date_diff), 1); ?> avg/day</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stats-card-modern warning">
+            <div class="stat-icon warning"><i class="bi bi-file-text-fill"></i></div>
+            <div class="stat-value"><?php echo number_format($article_stats['total_articles']); ?></div>
+            <div class="stat-label">Total Articles</div>
+            <div class="stat-change"><i class="bi bi-info-circle me-1"></i><?php echo number_format($article_stats['total_views']); ?> views</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stats-card-modern info">
+            <div class="stat-icon info"><i class="bi bi-chat-dots-fill"></i></div>
+            <div class="stat-value"><?php echo number_format($engagement_stats['total_comments']); ?></div>
+            <div class="stat-label">Comments</div>
+            <div class="stat-change"><i class="bi bi-people me-1"></i><?php echo number_format($engagement_stats['active_users']); ?> users</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-12 col-xl-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><i class="bi bi-graph-up me-2"></i>Visitor Trend</h5>
+                <span class="badge bg-primary">Last <?php echo $date_diff; ?> days</span>
             </div>
-            <div class="col-xl-3 col-md-6 mb-3">
-                <div class="stats-card">
-                    <div class="stats-icon">
-                        <i class="fas fa-users"></i>
-                    </div>
-                    <div class="stats-number"><?php echo $total_users; ?></div>
-                    <div class="stats-label">Total User</div>
-                </div>
-            </div>
-            <div class="col-xl-3 col-md-6 mb-3">
-                <div class="stats-card">
-                    <div class="stats-icon">
-                        <i class="fas fa-tags"></i>
-                    </div>
-                    <div class="stats-number"><?php echo $total_categories; ?></div>
-                    <div class="stats-label">Total Kategori</div>
-                </div>
-            </div>
-            <div class="col-xl-3 col-md-6 mb-3">
-                <div class="stats-card">
-                    <div class="stats-icon">
-                        <i class="fas fa-comments"></i>
-                    </div>
-                    <div class="stats-number"><?php echo $total_comments; ?></div>
-                    <div class="stats-label">Total Komentar</div>
-                </div>
+            <div class="card-body">
+                <div class="chart-container"><canvas id="visitorChart"></canvas></div>
             </div>
         </div>
-
-        <!-- Charts Row -->
-        <div class="row mb-4">
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Status Artikel</h5>
+    </div>
+    <div class="col-12 col-xl-4">
+        <div class="card h-100">
+            <div class="card-header"><h5 class="card-title mb-0"><i class="bi bi-heart-fill me-2"></i>User Engagement</h5></div>
+            <div class="card-body">
+                <div class="engagement-metric likes">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span><i class="bi bi-hand-thumbs-up-fill me-2"></i>Likes</span>
+                        <strong class="fs-4"><?php echo number_format($total_likes); ?></strong>
                     </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="articleStatusChart"></canvas>
-                        </div>
+                    <div class="progress" style="height: 8px;"><div class="progress-bar bg-success" style="width: <?php echo $total_reactions > 0 ? ($total_likes / $total_reactions * 100) : 0; ?>%"></div></div>
+                    <small class="text-muted mt-1 d-block"><?php echo $total_reactions > 0 ? number_format(($total_likes / $total_reactions * 100), 1) : 0; ?>% of reactions</small>
+                </div>
+                <div class="engagement-metric dislikes">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span><i class="bi bi-hand-thumbs-down-fill me-2"></i>Dislikes</span>
+                        <strong class="fs-4"><?php echo number_format($total_dislikes); ?></strong>
+                    </div>
+                    <div class="progress" style="height: 8px;"><div class="progress-bar bg-danger" style="width: <?php echo $total_reactions > 0 ? ($total_dislikes / $total_reactions * 100) : 0; ?>%"></div></div>
+                    <small class="text-muted mt-1 d-block"><?php echo $total_reactions > 0 ? number_format(($total_dislikes / $total_reactions * 100), 1) : 0; ?>% of reactions</small>
+                </div>
+                <div class="engagement-metric comments">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-chat-dots-fill me-2"></i>Avg. Comments/Day</span>
+                        <strong class="fs-4"><?php echo number_format($engagement_stats['total_comments'] / max(1, $date_diff), 1); ?></strong>
                     </div>
                 </div>
-            </div>
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">User Berdasarkan Role</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="userRoleChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Article Statistics -->
-        <div class="row mb-4">
-            <div class="col-lg-8">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Artikel Terbaru</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="scroll-hint">
-                            <i class="fas fa-arrows-alt-h"></i> Geser ke kiri/kanan untuk melihat seluruh tabel
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Judul</th>
-                                        <th>Penulis</th>
-                                        <th>Kategori</th>
-                                        <th>Status</th>
-                                        <th>Tanggal</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if ($recent_articles_result && mysqli_num_rows($recent_articles_result) > 0): ?>
-                                    <?php while ($article = mysqli_fetch_assoc($recent_articles_result)): ?>
-                                    <tr>
-                                        <td><?php echo htmlspecialchars($article['title']); ?></td>
-                                        <td><?php echo htmlspecialchars($article['author_name']); ?></td>
-                                        <td><?php echo htmlspecialchars($article['category_name']); ?></td>
-                                        <td>
-                                            <span class="badge badge-<?php echo $article['article_status']; ?>">
-                                                <?php echo ucfirst($article['article_status']); ?>
-                                            </span>
-                                        </td>
-                                        <td><?php echo date('d/m/Y H:i', strtotime($article['publication_date'])); ?>
-                                        </td>
-                                    </tr>
-                                    <?php endwhile; ?>
-                                    <?php else: ?>
-                                    <tr>
-                                        <td colspan="5" class="text-center no-data">Tidak ada artikel ditemukan</td>
-                                    </tr>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Top Penulis</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Penulis</th>
-                                        <th>Artikel</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if ($top_authors_result && mysqli_num_rows($top_authors_result) > 0): ?>
-                                    <?php while ($author = mysqli_fetch_assoc($top_authors_result)): ?>
-                                    <tr>
-                                        <td><?php echo htmlspecialchars($author['username']); ?></td>
-                                        <td>
-                                            <span class="badge">
-                                                <?php echo $author['article_count']; ?>
-                                            </span>
-                                        </td>
-                                    </tr>
-                                    <?php endwhile; ?>
-                                    <?php else: ?>
-                                    <tr>
-                                        <td colspan="2" class="text-center no-data">Tidak ada data penulis</td>
-                                    </tr>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Category Statistics -->
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Artikel Berdasarkan Kategori</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="scroll-hint">
-                            <i class="fas fa-arrows-alt-h"></i> Geser ke kiri/kanan untuk melihat seluruh tabel
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Kategori</th>
-                                        <th>Jumlah Artikel</th>
-                                        <th>Persentase</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if ($articles_by_category_result && mysqli_num_rows($articles_by_category_result) > 0): ?>
-                                    <?php while ($category = mysqli_fetch_assoc($articles_by_category_result)): ?>
-                                    <?php $percentage = $total_articles > 0 ? round(($category['article_count'] / $total_articles) * 100, 1) : 0; ?>
-                                    <tr>
-                                        <td><?php echo htmlspecialchars($category['category_name']); ?></td>
-                                        <td>
-                                            <span class="badge">
-                                                <?php echo $category['article_count']; ?> artikel
-                                            </span>
-                                        </td>
-                                        <td><?php echo $percentage; ?>%</td>
-                                    </tr>
-                                    <?php endwhile; ?>
-                                    <?php else: ?>
-                                    <tr>
-                                        <td colspan="3" class="text-center no-data">Tidak ada kategori ditemukan</td>
-                                    </tr>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
+                <div class="engagement-metric users">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-people-fill me-2"></i>Active Users</span>
+                        <strong class="fs-4"><?php echo number_format($engagement_stats['active_users']); ?></strong>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-    // Article Status Chart
-    const articleStatusData = <?php echo json_encode($article_status_stats); ?>;
-    const statusLabels = Object.keys(articleStatusData);
-    const statusData = Object.values(articleStatusData);
-    const statusColors = {
-        'published': '#28a745',
-        'pending': '#ffc107',
-        'draft': '#6c757d',
-        'rejected': '#dc3545'
-    };
+<div class="row g-3 mb-4">
+    <div class="col-12 col-xl-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><i class="bi bi-trophy-fill me-2"></i>Top 10 Articles</h5>
+                <span class="badge bg-warning text-dark">Most Viewed</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0">
+                        <thead>
+                            <tr><th width="60" class="text-center">Rank</th><th>Article</th><th width="120" class="text-center">Views</th></tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($top_articles)): ?>
+                            <tr><td colspan="3" class="text-center text-muted py-4"><i class="bi bi-inbox display-4 d-block mb-2 opacity-50"></i>No articles data</td></tr>
+                            <?php else: ?>
+                            <?php $rank = 1; foreach ($top_articles as $article): ?>
+                            <tr>
+                                <td class="text-center">
+                                    <?php if ($rank == 1): ?><span class="rank-badge gold"><?php echo $rank; ?></span>
+                                    <?php elseif ($rank == 2): ?><span class="rank-badge silver"><?php echo $rank; ?></span>
+                                    <?php elseif ($rank == 3): ?><span class="rank-badge bronze"><?php echo $rank; ?></span>
+                                    <?php else: ?><span class="text-muted fw-bold"><?php echo $rank; ?></span><?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="text-truncate mb-1" style="max-width: 400px;" title="<?php echo htmlspecialchars($article['title']); ?>">
+                                        <strong><?php echo htmlspecialchars($article['title']); ?></strong>
+                                    </div>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <small class="text-muted"><i class="bi bi-folder me-1"></i><?php echo htmlspecialchars($article['category_name'] ?? 'Uncategorized'); ?></small>
+                                        <small class="text-muted"><i class="bi bi-person me-1"></i><?php echo htmlspecialchars($article['author_name'] ?? 'Unknown'); ?></small>
+                                        <small class="text-muted"><i class="bi bi-calendar me-1"></i><?php echo date('d M Y', strtotime($article['publication_date'])); ?></small>
+                                    </div>
+                                </td>
+                                <td class="text-center"><span class="badge bg-primary fs-6"><?php echo number_format($article['view_count']); ?></span></td>
+                            </tr>
+                            <?php $rank++; endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-xl-5">
+        <div class="card">
+            <div class="card-header"><h5 class="card-title mb-0"><i class="bi bi-tags-fill me-2"></i>Category Performance</h5></div>
+            <div class="card-body">
+                <?php if (empty($category_stats)): ?>
+                <div class="text-center text-muted py-4"><i class="bi bi-tags display-4 d-block mb-2 opacity-50"></i>No category data</div>
+                <?php else: ?>
+                <?php foreach ($category_stats as $category): ?>
+                <div class="mb-3 pb-3 border-bottom border-secondary">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-semibold"><i class="bi bi-tag-fill me-2"></i><?php echo htmlspecialchars($category['name']); ?></span>
+                        <span class="badge bg-info"><?php echo number_format($category['total_views']); ?> views</span>
+                    </div>
+                    <div class="category-bar"><div class="category-bar-fill" style="width: <?php echo $max_category_views > 0 ? ($category['total_views'] / $max_category_views * 100) : 0; ?>%"></div></div>
+                    <small class="text-muted"><i class="bi bi-file-text me-1"></i><?php echo $category['article_count']; ?> artikel • <i class="bi bi-bar-chart me-1"></i><?php echo $category['article_count'] > 0 ? number_format($category['total_views'] / $category['article_count'], 1) : 0; ?> avg/article</small>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
 
-    const ctx1 = document.getElementById('articleStatusChart').getContext('2d');
-    new Chart(ctx1, {
-        type: 'doughnut',
-        data: {
-            labels: statusLabels.map(label => label.charAt(0).toUpperCase() + label.slice(1)),
-            datasets: [{
-                data: statusData,
-                backgroundColor: statusLabels.map(label => statusColors[label] || '#6c757d'),
-                borderColor: '#2d2d2d',
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: '#ffffff',
-                        padding: 20
-                    }
-                }
-            }
-        }
-    });
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-6">
+        <div class="card">
+            <div class="card-header"><h5 class="card-title mb-0"><i class="bi bi-person-badge-fill me-2"></i>Top Authors</h5></div>
+            <div class="card-body">
+                <?php if (empty($author_stats)): ?>
+                <div class="text-center text-muted py-4"><i class="bi bi-people display-4 d-block mb-2 opacity-50"></i>No author data</div>
+                <?php else: ?>
+                <?php foreach ($author_stats as $author): ?>
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom border-secondary">
+                    <div>
+                        <div class="fw-semibold"><?php echo htmlspecialchars($author['full_name']); ?></div>
+                        <small class="text-muted">@<?php echo htmlspecialchars($author['username']); ?></small>
+                    </div>
+                    <div class="text-end">
+                        <div class="badge bg-primary mb-1"><?php echo number_format($author['total_views']); ?> views</div>
+                        <div><small class="text-muted"><?php echo $author['article_count']; ?> artikel</small></div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6">
+        <div class="card">
+            <div class="card-header"><h5 class="card-title mb-0"><i class="bi bi-bar-chart-fill me-2"></i>Popular Pages</h5></div>
+            <div class="card-body">
+                <?php if (empty($popular_pages)): ?>
+                <div class="text-center text-muted py-4"><i class="bi bi-graph-down display-4 d-block mb-2 opacity-50"></i>No page data</div>
+                <?php else: ?>
+                <?php foreach ($popular_pages as $page): ?>
+                <div class="mb-3 pb-3 border-bottom border-secondary">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="text-truncate flex-grow-1" style="max-width: 300px;"><small class="text-muted"><i class="bi bi-link-45deg me-1"></i><?php echo htmlspecialchars($page['page_visited']); ?></small></div>
+                        <span class="badge bg-success ms-2"><?php echo number_format($page['visit_count']); ?> visits</span>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
 
-    // User Role Chart
-    const userRoleData = <?php echo json_encode($user_role_stats); ?>;
-    const roleLabels = Object.keys(userRoleData);
-    const roleData = Object.values(userRoleData);
-    const roleColors = ['#6c757d', '#495057', '#343a40'];
-
-    const ctx2 = document.getElementById('userRoleChart').getContext('2d');
-    new Chart(ctx2, {
-        type: 'bar',
-        data: {
-            labels: roleLabels.map(label => label.charAt(0).toUpperCase() + label.slice(1)),
-            datasets: [{
-                label: 'Jumlah User',
-                data: roleData,
-                backgroundColor: roleColors,
-                borderColor: '#2d2d2d',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                }
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const ctx = document.getElementById('visitorChart');
+new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: <?php echo json_encode(array_map(function($d){return date('d M',strtotime($d));},array_column($daily_stats,'stat_date'))); ?>,
+        datasets: [{
+            label: 'Unique Visitors',
+            data: <?php echo json_encode(array_column($daily_stats, 'unique_visitors')); ?>,
+            borderColor: '#667eea',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            tension: 0.4,
+            fill: true,
+            borderWidth: 3,
+            pointRadius: 4,
+            pointBackgroundColor: '#667eea',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+        }, {
+            label: 'Total Visits',
+            data: <?php echo json_encode(array_column($daily_stats, 'total_visits')); ?>,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            tension: 0.4,
+            fill: true,
+            borderWidth: 3,
+            pointRadius: 4,
+            pointBackgroundColor: '#10b981',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+        }, {
+            label: 'Page Views',
+            data: <?php echo json_encode(array_column($daily_stats, 'page_views')); ?>,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            tension: 0.4,
+            fill: true,
+            borderWidth: 3,
+            pointRadius: 4,
+            pointBackgroundColor: '#f59e0b',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top',
+                labels: { color: '#ffffff', padding: 15, font: { size: 12, weight: '600' }, usePointStyle: true }
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#ffffff'
-                    },
-                    grid: {
-                        color: '#555555'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#ffffff'
-                    },
-                    grid: {
-                        color: '#555555'
-                    }
-                }
+            tooltip: {
+                backgroundColor: 'rgba(26, 26, 26, 0.95)',
+                titleColor: '#ffffff',
+                bodyColor: '#b3b3b3',
+                borderColor: 'rgba(255, 255, 255, 0.1)',
+                borderWidth: 1,
+                padding: 12,
+                cornerRadius: 8,
+                callbacks: { label: function(c) { return c.dataset.label + ': ' + new Intl.NumberFormat().format(c.parsed.y); } }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: { color: '#b3b3b3', font: { size: 11 }, callback: function(v) { return new Intl.NumberFormat().format(v); } },
+                grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false }
+            },
+            x: {
+                ticks: { color: '#b3b3b3', font: { size: 11 }, maxRotation: 45, minRotation: 45 },
+                grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false }
             }
         }
-    });
-    </script>
-</body>
+    }
+});
 
-</html>
+document.addEventListener('DOMContentLoaded', function() {
+    const statCards = document.querySelectorAll('.stats-card-modern');
+    statCards.forEach((card, index) => {
+        setTimeout(() => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'all 0.5s ease';
+            setTimeout(() => {
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, 50);
+        }, index * 100);
+    });
+    
+    setTimeout(() => {
+        const categoryBars = document.querySelectorAll('.category-bar-fill');
+        categoryBars.forEach((bar, index) => {
+            setTimeout(() => {
+                bar.style.transition = 'width 1s ease';
+            }, index * 100);
+        });
+    }, 500);
+});
+</script>
